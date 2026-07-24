@@ -1,0 +1,27 @@
+services:
+  bridge:
+    build: ./bridge
+    container_name: whatsapp_bridge
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - ELIXIR_WEBHOOK_URL=http://brain:4000/webhook/whatsapp
+      - TARGET_GROUP_ID=${TARGET_GROUP_ID:-}
+    volumes:
+      - baileys_auth:/app/auth_info_baileys
+    restart: unless-stopped
+
+  brain:
+    build: ./brain
+    container_name: whatsapp_brain
+    ports:
+      - "4000:4000"
+    environment:
+      - PORT=4000
+      - BRIDGE_SEND_URL=http://bridge:3000/send
+      - PHX_SERVER=true
+    restart: unless-stopped
+
+volumes:
+  baileys_auth:

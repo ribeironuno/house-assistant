@@ -1,0 +1,12 @@
+.env
+.DS_Store
+
+# Node / Baileys
+node_modules/
+npm-debug.log*
+bridge/auth_info_baileys/
+
+# Elixir / Phoenix
+brain/_build/
+brain/deps/
+brain/*.ez

@@ -1,0 +1,15 @@
+{
+  "type": "module",
+  "name": "whatsapp-bridge",
+  "version": "1.0.0",
+  "description": "WhatsApp Baileys bridge service",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "^4.22.2",
+    "qrcode-terminal": "^0.12.0",
+    "whatsapp-web.js": "^1.34.7"
+  }
+}
