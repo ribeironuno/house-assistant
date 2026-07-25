@@ -9,6 +9,7 @@ defmodule Brain.Application do
   def start(_type, _args) do
     children = [
       BrainWeb.Telemetry,
+      Brain.Repo,
       {DNSCluster, query: Application.get_env(:brain, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Brain.PubSub},
       # Start a worker by calling: Brain.Worker.start_link(arg)

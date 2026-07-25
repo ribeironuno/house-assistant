@@ -8,6 +8,7 @@
 import Config
 
 config :brain,
+  ecto_repos: [Brain.Repo],
   generators: [timestamp_type: :utc_datetime]
 
 # Configures the endpoint

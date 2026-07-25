@@ -46,7 +46,9 @@ defmodule Brain.MixProject do
       {:jason, "~> 1.2"},
       {:dns_cluster, "~> 0.2.0"},
       {:bandit, "~> 1.5"},
-      {:req, "~> 0.5"}
+      {:req, "~> 0.5"},
+      {:ecto_sql, "~> 3.12"},
+      {:postgrex, ">= 0.0.0"}
     ]
   end
 
@@ -58,7 +60,10 @@ defmodule Brain.MixProject do
   # See the documentation for `Mix` for more info on aliases.
   defp aliases do
     [
-      setup: ["deps.get"],
+      setup: ["deps.get", "ecto.setup"],
+      "ecto.setup": ["ecto.create", "ecto.migrate"],
+      "ecto.reset": ["ecto.drop", "ecto.setup"],
+      test: ["ecto.create --quiet", "ecto.migrate --quiet", "test"],
       precommit: ["compile --warning-as-errors", "deps.unlock --unused", "format", "test"]
     ]
   end

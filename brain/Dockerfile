@@ -20,4 +20,4 @@ ENV PORT=4000
 ENV MIX_ENV=dev
 ENV PHX_SERVER=true
 
-CMD ["mix", "phx.server"]
+CMD ["sh", "-c", "mix ecto.setup && mix phx.server"]

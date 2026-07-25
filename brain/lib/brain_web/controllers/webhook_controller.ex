@@ -2,36 +2,76 @@ defmodule BrainWeb.WebhookController do
   use BrainWeb, :controller
   require Logger
 
+  @moduledoc """
+  Receives incoming WhatsApp messages forwarded by the Bridge and dispatches
+  them to `Brain.Commands` for processing.
+
+  ## Webhook payload (POST /webhook/whatsapp)
+
+      %{
+        "group_id" => "<group JID>",
+        "sender"   => "<sender JID>",
+        "text"     => "<message body>",
+        "from_me"  => true | false,
+        "timestamp" => <unix ts>
+      }
+
+  All messages — including `from_me: true` ones (typed on the owner's phone) —
+  are passed to `Brain.Commands.handle/2`. Loop prevention is handled there via
+  the `[BOT]` prefix check, not by discarding `from_me` messages wholesale.
+  """
+
+  @doc """
+  Handles an incoming webhook event from the Bridge.
+
+  Delegates text parsing and execution to `Brain.Commands.handle/2`, then
+  calls `send_reply/2` if a reply is produced.
+  """
   def create(conn, %{"group_id" => group_id, "sender" => sender, "text" => text}) do
-    Logger.info("[Brain] Received message in group #{group_id} from #{sender}: #{inspect(text)}")
+    Logger.info("[Brain] Mensagem recebida no grupo #{group_id} de #{sender}: #{inspect(text)}")
 
-    trimmed_text = text |> String.trim() |> String.downcase()
+    case Brain.Commands.handle(text, sender) do
+      {:reply, reply_text} ->
+        send_reply(group_id, reply_text)
 
-    if trimmed_text == "ping" do
-      send_reply(group_id, "pong")
+      :ignore ->
+        :ok
     end
 
     json(conn, %{status: "ok"})
   end
 
+  # Fallback: catches malformed payloads that don't match the expected shape.
   def create(conn, params) do
-    Logger.warning("[Brain] Received webhook payload with unexpected structure: #{inspect(params)}")
+    Logger.warning("[Brain] Payload do webhook com estrutura inesperada: #{inspect(params)}")
     json(conn, %{status: "ignored"})
   end
 
+  # ---------------------------------------------------------------------------
+  # Private helpers
+  # ---------------------------------------------------------------------------
+
+  # Posts a reply to the Bridge's /send endpoint.
+  # BRIDGE_SEND_URL is read at runtime so it can be overridden per environment
+  # without a recompile (important for Docker vs. local dev).
   defp send_reply(group_id, reply_text) do
-    bridge_url = System.get_env("BRIDGE_SEND_URL", "http://bridge:3000/send")
-    Logger.info("[Brain] Sending reply '#{reply_text}' to group [#{group_id}] via #{bridge_url}")
+    default_bridge_url =
+      if System.get_env("PHX_SERVER") == "true",
+        do: "http://bridge:3000/send",
+        else: "http://localhost:3000/send"
+
+    bridge_url = System.get_env("BRIDGE_SEND_URL", default_bridge_url)
+    Logger.info("[Brain] A enviar resposta '#{reply_text}' para o grupo [#{group_id}] via #{bridge_url}")
 
     case Req.post(bridge_url, json: %{to: group_id, text: reply_text}) do
       {:ok, %Req.Response{status: 200}} ->
-        Logger.info("[Brain] Reply successfully acknowledged by bridge")
+        Logger.info("[Brain] Resposta confirmada pela ponte (Bridge)")
 
       {:ok, %Req.Response{status: status, body: body}} ->
-        Logger.error("[Brain] Bridge returned HTTP #{status}: #{inspect(body)}")
+        Logger.error("[Brain] Ponte (Bridge) respondeu com HTTP #{status}: #{inspect(body)}")
 
       {:error, exception} ->
-        Logger.error("[Brain] Failed to reach bridge send endpoint: #{inspect(exception)}")
+        Logger.error("[Brain] Falha ao comunicar com o endpoint da ponte (Bridge): #{inspect(exception)}")
     end
   end
 end

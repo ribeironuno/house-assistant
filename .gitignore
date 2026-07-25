@@ -5,6 +5,8 @@
 node_modules/
 npm-debug.log*
 bridge/auth_info_baileys/
+bridge/.wwebjs_auth/
+bridge/.wwebjs_cache/
 
 # Elixir / Phoenix
 brain/_build/
