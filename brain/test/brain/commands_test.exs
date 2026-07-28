@@ -1,6 +1,7 @@
 defmodule Brain.CommandsTest do
   use BrainWeb.ConnCase, async: true
   alias Brain.Commands
+  alias Brain.Reminder
   alias Brain.Repo
   alias Brain.ShoppingItem
 
@@ -19,7 +20,8 @@ defmodule Brain.CommandsTest do
   end
 
   test "adicionar command handles extra spaces and casing" do
-    assert {:reply, "[BOT] ✅ Adicionado: Ovos Frescos"} = Commands.handle("  ADICIONAR   Ovos Frescos  ", "user_2")
+    assert {:reply, "[BOT] ✅ Adicionado: Ovos Frescos"} =
+             Commands.handle("  ADICIONAR   Ovos Frescos  ", "user_2")
 
     items = Repo.all(ShoppingItem)
     assert length(items) == 1
@@ -27,11 +29,13 @@ defmodule Brain.CommandsTest do
   end
 
   test "add command without argument asks for item name" do
-    assert {:reply, "[BOT] Por favor especifica o item a adicionar, ex: 'adiciona leite'."} = Commands.handle("adiciona", "user_1")
+    assert {:reply, "[BOT] Por favor especifica o item a adicionar, ex: 'adiciona leite'."} =
+             Commands.handle("adiciona", "user_1")
   end
 
   test "lista command shows items in order of insertion" do
-    assert {:reply, "[BOT] 🛒 A tua lista de compras está vazia."} = Commands.handle("lista", "user_1")
+    assert {:reply, "[BOT] 🛒 A tua lista de compras está vazia."} =
+             Commands.handle("lista", "user_1")
 
     Commands.handle("adiciona leite", "user_1")
     Commands.handle("adiciona ovos", "user_2")
@@ -60,7 +64,8 @@ defmodule Brain.CommandsTest do
   end
 
   test "remove command handles non-existent item gracefully" do
-    assert {:reply, "[BOT] O item 'manteiga' não foi encontrado na lista de compras."} = Commands.handle("remove manteiga", "user_1")
+    assert {:reply, "[BOT] O item 'manteiga' não foi encontrado na lista de compras."} =
+             Commands.handle("remove manteiga", "user_1")
   end
 
   test "limpar command deletes all shopping items" do
@@ -71,6 +76,59 @@ defmodule Brain.CommandsTest do
     assert Repo.all(ShoppingItem) == []
   end
 
+  test "ajuda command lists known commands" do
+    assert {:reply, reply} = Commands.handle("ajuda", "user_1")
+
+    assert reply =~ "[BOT] Comandos que conheço:"
+    assert reply =~ "adiciona <item>"
+    assert reply =~ "remove <item>"
+    assert reply =~ "lista"
+    assert reply =~ "limpar lista"
+    assert reply =~ "lembrar de <tarefa> daqui a N minutos/horas/dias/semanas"
+
+    assert {:reply, ^reply} = Commands.handle("help", "user_1")
+    assert {:reply, ^reply} = Commands.handle("comandos", "user_1")
+    assert Repo.all(ShoppingItem) == []
+    assert Repo.all(Reminder) == []
+  end
+
+  test "lembrar de command creates reminder for logo" do
+    assert {:reply, reply} = Commands.handle("lembrar de fazer isto logo", "user_1", "group_1")
+    assert reply =~ "[BOT] 🔔 Lembrete guardado!"
+    assert reply =~ "Título: fazer isto"
+    assert reply =~ "Falta: 30 minutos"
+
+    [reminder] = Repo.all(Reminder)
+    assert reminder.text == "fazer isto"
+    assert reminder.created_by == "user_1"
+    assert reminder.group_id == "group_1"
+    assert DateTime.compare(reminder.remind_at, DateTime.utc_now()) == :gt
+    assert is_nil(reminder.sent_at)
+  end
+
+  test "lembrar de command creates reminder daqui a 3 dias" do
+    assert {:reply, reply} =
+             Commands.handle("lembrar de pagar scouts daqui a 3 dias", "user_1", "group_1")
+
+    assert reply =~ "[BOT] 🔔 Lembrete guardado!"
+    assert reply =~ "Título: pagar scouts"
+    assert reply =~ "Falta: 3 dias"
+
+    [reminder] = Repo.all(Reminder)
+    assert reminder.text == "pagar scouts"
+
+    seconds_until_reminder = DateTime.diff(reminder.remind_at, DateTime.utc_now(), :second)
+    assert seconds_until_reminder in (3 * 24 * 60 * 60 - 5)..(3 * 24 * 60 * 60 + 5)
+  end
+
+  test "lembrar de command asks for missing reminder time" do
+    assert {:reply,
+            "[BOT] Por favor diz quando queres o lembrete, ex: 'logo' ou 'daqui a 3 dias'."} =
+             Commands.handle("lembrar de pagar scouts", "user_1", "group_1")
+
+    assert Repo.all(Reminder) == []
+  end
+
   test "unrecognized messages and bot response prefixes are ignored" do
     assert :ignore = Commands.handle("olá tudo bem?", "user_1")
     assert :ignore = Commands.handle("qual é a receita de hoje?", "user_1")
@@ -78,5 +136,6 @@ defmodule Brain.CommandsTest do
     assert :ignore = Commands.handle("[BOT] 🗑️ Removido: leite", "user_1")
     assert :ignore = Commands.handle("[BOT] 🛒 Lista de Compras:\n1. leite", "user_1")
     assert :ignore = Commands.handle("[BOT] 🧹 Lista de compras limpa.", "user_1")
+    assert :ignore = Commands.handle("[BOT] 🔔 Lembrete: pagar scouts", "user_1")
   end
 end

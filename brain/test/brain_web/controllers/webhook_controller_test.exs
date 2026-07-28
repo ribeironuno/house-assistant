@@ -16,7 +16,8 @@ defmodule BrainWeb.WebhookControllerTest do
     assert json_response(conn, 200) == %{"status" => "ok"}
   end
 
-  test "POST /webhook/whatsapp processes from_me:true messages (human commands from owner's phone)", %{conn: conn} do
+  test "POST /webhook/whatsapp processes from_me:true messages (human commands from owner's phone)",
+       %{conn: conn} do
     payload = %{
       "group_id" => "12345@g.us",
       "sender" => "67890@s.whatsapp.net",
@@ -29,7 +30,9 @@ defmodule BrainWeb.WebhookControllerTest do
     assert length(Brain.Repo.all(Brain.ShoppingItem)) == 1
   end
 
-  test "POST /webhook/whatsapp ignores [BOT] prefixed messages to prevent echo loops", %{conn: conn} do
+  test "POST /webhook/whatsapp ignores [BOT] prefixed messages to prevent echo loops", %{
+    conn: conn
+  } do
     payload = %{
       "group_id" => "12345@g.us",
       "sender" => "67890@s.whatsapp.net",
@@ -52,5 +55,20 @@ defmodule BrainWeb.WebhookControllerTest do
     conn = post(conn, ~p"/webhook/whatsapp", payload)
     assert json_response(conn, 200) == %{"status" => "ok"}
     assert length(Brain.Repo.all(Brain.ShoppingItem)) == 1
+  end
+
+  test "POST /webhook/whatsapp creates reminders", %{conn: conn} do
+    payload = %{
+      "group_id" => "12345@g.us",
+      "sender" => "67890@s.whatsapp.net",
+      "text" => "lembrar de pagar scouts daqui a 3 dias"
+    }
+
+    conn = post(conn, ~p"/webhook/whatsapp", payload)
+    assert json_response(conn, 200) == %{"status" => "ok"}
+
+    [reminder] = Brain.Repo.all(Brain.Reminder)
+    assert reminder.text == "pagar scouts"
+    assert reminder.group_id == "12345@g.us"
   end
 end

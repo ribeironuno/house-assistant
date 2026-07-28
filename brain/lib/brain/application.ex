@@ -7,16 +7,17 @@ defmodule Brain.Application do
 
   @impl true
   def start(_type, _args) do
-    children = [
-      BrainWeb.Telemetry,
-      Brain.Repo,
-      {DNSCluster, query: Application.get_env(:brain, :dns_cluster_query) || :ignore},
-      {Phoenix.PubSub, name: Brain.PubSub},
-      # Start a worker by calling: Brain.Worker.start_link(arg)
-      # {Brain.Worker, arg},
-      # Start to serve requests, typically the last entry
-      BrainWeb.Endpoint
-    ]
+    children =
+      [
+        BrainWeb.Telemetry,
+        Brain.Repo,
+        {DNSCluster, query: Application.get_env(:brain, :dns_cluster_query) || :ignore},
+        {Phoenix.PubSub, name: Brain.PubSub},
+        reminder_dispatcher_child(),
+        # Start to serve requests, typically the last entry
+        BrainWeb.Endpoint
+      ]
+      |> Enum.reject(&is_nil/1)
 
     # See https://hexdocs.pm/elixir/Supervisor.html
     # for other strategies and supported options
@@ -30,5 +31,11 @@ defmodule Brain.Application do
   def config_change(changed, _new, removed) do
     BrainWeb.Endpoint.config_change(changed, removed)
     :ok
+  end
+
+  defp reminder_dispatcher_child do
+    if Application.get_env(:brain, :start_reminder_dispatcher, true) do
+      Brain.ReminderDispatcher
+    end
   end
 end

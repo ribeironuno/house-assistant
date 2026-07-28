@@ -1,6 +1,6 @@
 # 🏠 House Assistant — WhatsApp Family Bot
 
-A self-hosted WhatsApp assistant for the family group. It manages a shared **shopping list** backed by Postgres, understands commands in **Portuguese**, and is designed to be extended with reminders, menus, and an LLM layer in future phases.
+A self-hosted WhatsApp assistant for the family group. It manages a shared **shopping list** and scheduled **reminders** backed by Postgres, understands commands in **Portuguese**, and is designed to be extended with menus and an LLM layer in future phases.
 
 ---
 
@@ -30,8 +30,8 @@ A self-hosted WhatsApp assistant for the family group. It manages a shared **sho
 | Service | Tech | Role |
 |---|---|---|
 | **Bridge** | Node.js + whatsapp-web.js | Speaks the WhatsApp Web protocol. Forwards incoming group messages to the brain via `POST /webhook/whatsapp`. Sends replies back via `POST /send`. Has no intelligence of its own. |
-| **Brain** | Elixir / Phoenix | Receives messages, parses commands, reads/writes Postgres, and calls the bridge to reply. All business logic lives here. |
-| **DB** | PostgreSQL 16 | Stores the shopping list (`shopping_items` table). Managed by Ecto migrations. |
+| **Brain** | Elixir / Phoenix | Receives messages, parses commands, reads/writes Postgres, schedules due reminders, and calls the bridge to reply. All business logic lives here. |
+| **DB** | PostgreSQL 16 | Stores the shopping list (`shopping_items` table) and reminders (`reminders` table). Managed by Ecto migrations. |
 
 ---
 
@@ -58,6 +58,12 @@ The assistant is case-insensitive and ignores all unrecognised messages silently
 | `remove <item>` / `remover <item>` | `remove leite` | `[BOT] 🗑️ Removido: leite` |
 | `lista` / `ver lista` / `mostrar lista` | `lista` | `[BOT] 🛒 Lista de Compras:\n1. leite\n...` |
 | `limpar` / `limpar lista` | `limpar lista` | `[BOT] 🧹 Lista de compras limpa.` |
+| `lembrar de <tarefa> logo` | `lembrar de fazer isto logo` | `[BOT] 🔔 Lembrete guardado: fazer isto (...)` |
+| `lembrar de <tarefa> daqui a N minutos/horas/dias/semanas` | `lembrar de pagar scouts daqui a 3 dias` | `[BOT] 🔔 Lembrete guardado: pagar scouts (...)` |
+| `lembra-me de <tarefa> amanhã` | `lembra-me de pagar a água amanhã` | `[BOT] 🔔 Lembrete guardado: pagar a água (...)` |
+| `ajuda` / `help` / `comandos` | `ajuda` | Lista os comandos conhecidos |
+
+Due reminders are sent back to the original WhatsApp group as `[BOT] 🔔 Lembrete: <tarefa>`.
 
 ---
 
@@ -124,6 +130,7 @@ docker compose up --build
 | Variable | Default | Description |
 |---|---|---|
 | `BRIDGE_SEND_URL` | `http://localhost:3000/send` | Bridge endpoint for outgoing messages |
+| `REMINDER_DISPATCH_INTERVAL_MS` | `60000` | Reminder polling interval, if configured in Elixir runtime |
 | `DATABASE_URL` | *(from config/dev.exs)* | Postgres connection string |
 | `PHX_SERVER` | — | Set to `true` in Docker to auto-start the server |
 
@@ -150,6 +157,7 @@ docker exec -it whatsapp_db psql -U postgres -d house_assistant_dev
 
 ```sql
 SELECT id, name, added_by, done, inserted_at FROM shopping_items;
+SELECT id, text, group_id, remind_at, sent_at FROM reminders ORDER BY remind_at;
 ```
 
 ---
@@ -169,6 +177,7 @@ mix test
 
 - [x] Phase 1 — WhatsApp bridge + Phoenix webhook plumbing
 - [x] Phase 2 — Persistent shopping list with Postgres, Portuguese commands
-- [ ] Phase 3 — LLM intent parsing (Groq / Gemini free tier)
-- [ ] Phase 4 — Weekly menu suggestions
-- [ ] Phase 5 — Dynamic reminders via Oban (e.g. "lembra-me de pagar a água no dia 5")
+- [x] Phase 3 — Dynamic reminders (e.g. "lembrar de pagar scouts daqui a 3 dias")
+- [ ] Phase 4 — LLM intent parsing (Groq / Gemini free tier)
+- [ ] Phase 5 — Weekly menu suggestions
+- [ ] Phase 6 — Reminder parser improvements for exact dates/times

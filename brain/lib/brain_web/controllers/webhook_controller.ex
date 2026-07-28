@@ -30,9 +30,9 @@ defmodule BrainWeb.WebhookController do
   def create(conn, %{"group_id" => group_id, "sender" => sender, "text" => text}) do
     Logger.info("[Brain] Mensagem recebida no grupo #{group_id} de #{sender}: #{inspect(text)}")
 
-    case Brain.Commands.handle(text, sender) do
+    case Brain.Commands.handle(text, sender, group_id) do
       {:reply, reply_text} ->
-        send_reply(group_id, reply_text)
+        Brain.BridgeClient.send_message(group_id, reply_text)
 
       :ignore ->
         :ok
@@ -45,33 +45,5 @@ defmodule BrainWeb.WebhookController do
   def create(conn, params) do
     Logger.warning("[Brain] Payload do webhook com estrutura inesperada: #{inspect(params)}")
     json(conn, %{status: "ignored"})
-  end
-
-  # ---------------------------------------------------------------------------
-  # Private helpers
-  # ---------------------------------------------------------------------------
-
-  # Posts a reply to the Bridge's /send endpoint.
-  # BRIDGE_SEND_URL is read at runtime so it can be overridden per environment
-  # without a recompile (important for Docker vs. local dev).
-  defp send_reply(group_id, reply_text) do
-    default_bridge_url =
-      if System.get_env("PHX_SERVER") == "true",
-        do: "http://bridge:3000/send",
-        else: "http://localhost:3000/send"
-
-    bridge_url = System.get_env("BRIDGE_SEND_URL", default_bridge_url)
-    Logger.info("[Brain] A enviar resposta '#{reply_text}' para o grupo [#{group_id}] via #{bridge_url}")
-
-    case Req.post(bridge_url, json: %{to: group_id, text: reply_text}) do
-      {:ok, %Req.Response{status: 200}} ->
-        Logger.info("[Brain] Resposta confirmada pela ponte (Bridge)")
-
-      {:ok, %Req.Response{status: status, body: body}} ->
-        Logger.error("[Brain] Ponte (Bridge) respondeu com HTTP #{status}: #{inspect(body)}")
-
-      {:error, exception} ->
-        Logger.error("[Brain] Falha ao comunicar com o endpoint da ponte (Bridge): #{inspect(exception)}")
-    end
   end
 end

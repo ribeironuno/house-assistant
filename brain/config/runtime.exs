@@ -20,6 +20,11 @@ if System.get_env("PHX_SERVER") do
   config :brain, BrainWeb.Endpoint, server: true
 end
 
+if reminder_dispatch_interval_ms = System.get_env("REMINDER_DISPATCH_INTERVAL_MS") do
+  config :brain,
+    reminder_dispatch_interval_ms: String.to_integer(reminder_dispatch_interval_ms)
+end
+
 if database_url = System.get_env("DATABASE_URL") do
   config :brain, Brain.Repo,
     url: database_url,

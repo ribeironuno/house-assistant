@@ -15,9 +15,9 @@ defmodule Brain.ShoppingItem do
   """
 
   schema "shopping_items" do
-    field :name, :string
-    field :added_by, :string
-    field :done, :boolean, default: false
+    field(:name, :string)
+    field(:added_by, :string)
+    field(:done, :boolean, default: false)
 
     timestamps()
   end

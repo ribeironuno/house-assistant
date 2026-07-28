@@ -10,7 +10,6 @@ config :brain, Brain.Repo,
   pool: Ecto.Adapters.SQL.Sandbox,
   pool_size: System.schedulers_online() * 2
 
-
 # We don't run a server during test. If one is required,
 # you can enable the server option below.
 config :brain, BrainWeb.Endpoint,
@@ -20,6 +19,10 @@ config :brain, BrainWeb.Endpoint,
 
 # Print only warnings and errors during test
 config :logger, level: :warning
+
+config :brain,
+  start_reminder_dispatcher: false,
+  send_outgoing_messages: false
 
 # Initialize plugs at runtime for faster test compilation
 config :phoenix, :plug_init_mode, :runtime

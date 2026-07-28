@@ -47,6 +47,7 @@ defmodule Brain.MixProject do
       {:dns_cluster, "~> 0.2.0"},
       {:bandit, "~> 1.5"},
       {:req, "~> 0.5"},
+      {:tz, "~> 0.28"},
       {:ecto_sql, "~> 3.12"},
       {:postgrex, ">= 0.0.0"}
     ]
