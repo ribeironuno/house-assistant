@@ -1,4 +1,4 @@
-defmodule Brain.BridgeClient do
+defmodule Brain.WhatsApp.BridgeClient do
   require Logger
 
   @moduledoc """

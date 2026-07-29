@@ -1,9 +1,11 @@
 defmodule Brain.CommandsTest do
   use BrainWeb.ConnCase, async: true
+  import Ecto.Query
+
   alias Brain.Commands
-  alias Brain.Reminder
   alias Brain.Repo
-  alias Brain.ShoppingItem
+  alias Brain.Reminders.Reminder
+  alias Brain.ShoppingList.Item
 
   setup do
     :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)
@@ -12,7 +14,7 @@ defmodule Brain.CommandsTest do
   test "adiciona command adds item to shopping list and returns confirmation" do
     assert {:reply, "[BOT] ✅ Adicionado: leite"} = Commands.handle("adiciona leite", "user_1")
 
-    items = Repo.all(ShoppingItem)
+    items = Repo.all(Item)
     assert length(items) == 1
     assert hd(items).name == "leite"
     assert hd(items).added_by == "user_1"
@@ -23,14 +25,43 @@ defmodule Brain.CommandsTest do
     assert {:reply, "[BOT] ✅ Adicionado: Ovos Frescos"} =
              Commands.handle("  ADICIONAR   Ovos Frescos  ", "user_2")
 
-    items = Repo.all(ShoppingItem)
+    items = Repo.all(Item)
     assert length(items) == 1
     assert hd(items).name == "Ovos Frescos"
+  end
+
+  test "adicionar command adds multiple comma-separated items" do
+    assert {:reply, "[BOT] ✅ Adicionados:\n1. leite\n2. pão\n3. manteiga"} =
+             Commands.handle("adicionar leite, pão, manteiga", "user_1")
+
+    item_names =
+      from(i in Item, order_by: [asc: i.inserted_at, asc: i.id])
+      |> Repo.all()
+      |> Enum.map(& &1.name)
+
+    assert item_names == ["leite", "pão", "manteiga"]
+  end
+
+  test "adicionar command ignores empty comma-separated entries" do
+    assert {:reply, "[BOT] ✅ Adicionados:\n1. leite\n2. manteiga"} =
+             Commands.handle("adiciona leite, , manteiga, ", "user_1")
+
+    item_names =
+      from(i in Item, order_by: [asc: i.inserted_at, asc: i.id])
+      |> Repo.all()
+      |> Enum.map(& &1.name)
+
+    assert item_names == ["leite", "manteiga"]
   end
 
   test "add command without argument asks for item name" do
     assert {:reply, "[BOT] Por favor especifica o item a adicionar, ex: 'adiciona leite'."} =
              Commands.handle("adiciona", "user_1")
+  end
+
+  test "add command with only commas asks for item name" do
+    assert {:reply, "[BOT] Por favor especifica o item a adicionar, ex: 'adiciona leite'."} =
+             Commands.handle("adiciona , ,", "user_1")
   end
 
   test "lista command shows items in order of insertion" do
@@ -51,7 +82,7 @@ defmodule Brain.CommandsTest do
 
     assert {:reply, "[BOT] 🗑️ Removido: leite"} = Commands.handle("remove leite", "user_1")
 
-    items = Repo.all(ShoppingItem)
+    items = Repo.all(Item)
     assert length(items) == 1
     assert hd(items).name == "ovos"
   end
@@ -60,7 +91,7 @@ defmodule Brain.CommandsTest do
     Commands.handle("adiciona Leite Gordo", "user_1")
 
     assert {:reply, "[BOT] 🗑️ Removido: Leite Gordo"} = Commands.handle("remover leite", "user_1")
-    assert Repo.all(ShoppingItem) == []
+    assert Repo.all(Item) == []
   end
 
   test "remove command handles non-existent item gracefully" do
@@ -73,7 +104,7 @@ defmodule Brain.CommandsTest do
     Commands.handle("adiciona ovos", "user_1")
 
     assert {:reply, "[BOT] 🧹 Lista de compras limpa."} = Commands.handle("limpar lista", "user_1")
-    assert Repo.all(ShoppingItem) == []
+    assert Repo.all(Item) == []
   end
 
   test "ajuda command lists known commands" do
@@ -88,7 +119,7 @@ defmodule Brain.CommandsTest do
 
     assert {:reply, ^reply} = Commands.handle("help", "user_1")
     assert {:reply, ^reply} = Commands.handle("comandos", "user_1")
-    assert Repo.all(ShoppingItem) == []
+    assert Repo.all(Item) == []
     assert Repo.all(Reminder) == []
   end
 

@@ -32,7 +32,7 @@ defmodule BrainWeb.WebhookController do
 
     case Brain.Commands.handle(text, sender, group_id) do
       {:reply, reply_text} ->
-        Brain.BridgeClient.send_message(group_id, reply_text)
+        Brain.WhatsApp.BridgeClient.send_message(group_id, reply_text)
 
       :ignore ->
         :ok

@@ -1,11 +1,11 @@
-defmodule Brain.ReminderDispatcher do
+defmodule Brain.Reminders.Dispatcher do
   use GenServer
   import Ecto.Query
   require Logger
 
-  alias Brain.BridgeClient
-  alias Brain.Reminder
   alias Brain.Repo
+  alias Brain.Reminders.Reminder
+  alias Brain.WhatsApp.BridgeClient
 
   @moduledoc """
   Periodically sends due reminders through the WhatsApp Bridge.

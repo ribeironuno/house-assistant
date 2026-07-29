@@ -1,4 +1,4 @@
-defmodule Brain.Reminder do
+defmodule Brain.Reminders.Reminder do
   use Ecto.Schema
   import Ecto.Changeset
 

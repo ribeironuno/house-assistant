@@ -1,4 +1,4 @@
-defmodule Brain.ShoppingItem do
+defmodule Brain.ShoppingList.Item do
   use Ecto.Schema
   import Ecto.Changeset
 

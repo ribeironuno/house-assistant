@@ -35,7 +35,7 @@ defmodule Brain.Application do
 
   defp reminder_dispatcher_child do
     if Application.get_env(:brain, :start_reminder_dispatcher, true) do
-      Brain.ReminderDispatcher
+      Brain.Reminders.Dispatcher
     end
   end
 end

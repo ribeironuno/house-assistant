@@ -48,16 +48,7 @@ let isConnected = false;
 const recentSentMessageIds = new Set();
 const recentSentTexts = new Set();
 
-const BOT_RESPONSE_PREFIXES = [
-  "[BOT]",
-  "✅",
-  "🗑️",
-  "🛒",
-  "🧹",
-  "Por favor",
-  "O item",
-  "Não foi",
-];
+const BOT_RESPONSE_PREFIXES = ["[BOT]", "✅", "🗑️", "🛒", "🧹"];
 
 /**
  * Records a just-sent message in both caches so that the echo event

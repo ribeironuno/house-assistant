@@ -54,7 +54,7 @@ The assistant is case-insensitive and ignores all unrecognised messages silently
 
 | Command | Example | Bot reply |
 |---|---|---|
-| `adiciona <item>` / `adicionar <item>` | `adiciona leite` | `[BOT] ✅ Adicionado: leite` |
+| `adiciona <item>` / `adicionar <item>[, <item>]` | `adiciona leite, pão, manteiga` | `[BOT] ✅ Adicionados:\n1. leite\n2. pão\n3. manteiga` |
 | `remove <item>` / `remover <item>` | `remove leite` | `[BOT] 🗑️ Removido: leite` |
 | `lista` / `ver lista` / `mostrar lista` | `lista` | `[BOT] 🛒 Lista de Compras:\n1. leite\n...` |
 | `limpar` / `limpar lista` | `limpar lista` | `[BOT] 🧹 Lista de compras limpa.` |
