@@ -43,7 +43,7 @@ defmodule Brain.Commands do
 
   def handle(_text, _sender, _group_id), do: :ignore
 
-  defp route(trimmed_raw, trimmed_lower, sender, group_id) do
+  defp route(trimmed_raw, trimmed_lower, sender, group_id, llm_attempted? \\ false) do
     cond do
       help_command?(trimmed_lower) ->
         {:reply, @help_text}
@@ -82,7 +82,20 @@ defmodule Brain.Commands do
         |> extract_argument("remove")
         |> ShoppingList.remove()
 
+      true and not llm_attempted? ->
+        fallback_to_llm(trimmed_raw, sender, group_id)
+
       true ->
+        :ignore
+    end
+  end
+
+  defp fallback_to_llm(trimmed_raw, sender, group_id) do
+    case Brain.LLM.CommandInterpreter.interpret(trimmed_raw) do
+      {:ok, canonical_command} ->
+        route(canonical_command, String.downcase(canonical_command), sender, group_id, true)
+
+      :ignore ->
         :ignore
     end
   end
