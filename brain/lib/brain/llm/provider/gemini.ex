@@ -6,32 +6,12 @@ defmodule Brain.LLM.Providers.Gemini do
 
   @impl true
   def generate_structured(system_prompt, user_prompt, schema) do
-    with {:ok, api_key} <- api_key() do
-      url = "#{@endpoint}/#{model()}:generateContent"
+    request(system_prompt, user_prompt, schema, 15_000)
+  end
 
-      body = %{
-        systemInstruction: %{parts: [%{text: system_prompt}]},
-        contents: [%{role: "user", parts: [%{text: user_prompt}]}],
-        generationConfig: %{
-          temperature: 0,
-          responseMimeType: "application/json",
-          responseSchema: schema
-        }
-      }
-
-      headers = [{"X-goog-api-key", api_key}, {"Content-Type", "application/json"}]
-
-      case Req.post(url, json: body, headers: headers, receive_timeout: 8_000) do
-        {:ok, %Req.Response{status: 200, body: resp_body}} ->
-          resp_body |> extract_text() |> decode_json()
-
-        {:ok, %Req.Response{status: status, body: resp_body}} ->
-          {:error, {:gemini_http_error, status, resp_body}}
-
-        {:error, exception} ->
-          {:error, exception}
-      end
-    end
+  @impl true
+  def generate_menu(system_prompt, user_prompt, schema) do
+    request(system_prompt, user_prompt, schema, 120_000)
   end
 
   @impl true
@@ -63,6 +43,35 @@ defmodule Brain.LLM.Providers.Gemini do
       headers = [{"X-goog-api-key", api_key}, {"Content-Type", "application/json"}]
 
       case Req.post(url, json: body, headers: headers, receive_timeout: 30_000) do
+        {:ok, %Req.Response{status: 200, body: resp_body}} ->
+          resp_body |> extract_text() |> decode_json()
+
+        {:ok, %Req.Response{status: status, body: resp_body}} ->
+          {:error, {:gemini_http_error, status, resp_body}}
+
+        {:error, exception} ->
+          {:error, exception}
+      end
+    end
+  end
+
+  defp request(system_prompt, user_prompt, schema, receive_timeout) do
+    with {:ok, api_key} <- api_key() do
+      url = "#{@endpoint}/#{model()}:generateContent"
+
+      body = %{
+        systemInstruction: %{parts: [%{text: system_prompt}]},
+        contents: [%{role: "user", parts: [%{text: user_prompt}]}],
+        generationConfig: %{
+          temperature: 0,
+          responseMimeType: "application/json",
+          responseSchema: schema
+        }
+      }
+
+      headers = [{"X-goog-api-key", api_key}, {"Content-Type", "application/json"}]
+
+      case Req.post(url, json: body, headers: headers, receive_timeout: receive_timeout) do
         {:ok, %Req.Response{status: 200, body: resp_body}} ->
           resp_body |> extract_text() |> decode_json()
 
