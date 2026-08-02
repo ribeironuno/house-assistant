@@ -69,6 +69,18 @@ defmodule Brain.ShoppingList do
     {:reply, "[BOT] 🧹 Lista de compras limpa."}
   end
 
+  def get_active_items do
+    from(i in Item, where: i.done == false, order_by: [asc: i.inserted_at])
+    |> Repo.all()
+  end
+
+  def delete_items(items) when is_list(items) do
+    ids = Enum.map(items, & &1.id)
+
+    from(i in Item, where: i.id in ^ids)
+    |> Repo.delete_all()
+  end
+
   defp parse_items(item_text) do
     item_text
     |> String.split(",")

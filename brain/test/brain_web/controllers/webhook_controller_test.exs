@@ -71,4 +71,19 @@ defmodule BrainWeb.WebhookControllerTest do
     assert reminder.text == "pagar scouts"
     assert reminder.group_id == "12345@g.us"
   end
+
+  test "POST /webhook/whatsapp processes media payload", %{conn: conn} do
+    payload = %{
+      "group_id" => "12345@g.us",
+      "sender" => "67890@s.whatsapp.net",
+      "text" => "",
+      "media" => %{
+        "mimetype" => "image/jpeg",
+        "data" => "base64datahere"
+      }
+    }
+
+    conn = post(conn, ~p"/webhook/whatsapp", payload)
+    assert json_response(conn, 200) == %{"status" => "ok"}
+  end
 end

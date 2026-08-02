@@ -161,7 +161,7 @@ client.on("message_create", async (message) => {
  * @param {object} message - A whatsapp-web.js Message object.
  */
 async function handleIncomingMessage(message) {
-  if (!message.body) return;
+  if (!message.body && !message.hasMedia) return;
 
   // Step 2: Drop bot echoes
   if (isBridgeSelfMessage(message)) {
@@ -181,11 +181,29 @@ async function handleIncomingMessage(message) {
     return;
   }
 
+  let mediaData = null;
+  if (message.hasMedia) {
+    try {
+      const downloaded = await message.downloadMedia();
+      if (downloaded && downloaded.data) {
+        mediaData = {
+          mimetype: downloaded.mimetype,
+          data: downloaded.data,
+          filename: downloaded.filename || null,
+        };
+        console.log(`[Bridge] Downloaded media (${downloaded.mimetype}, ${downloaded.data.length} chars base64)`);
+      }
+    } catch (err) {
+      console.error("[Bridge] Failed to download media:", err.message);
+    }
+  }
+
   console.log("[Bridge] Processing incoming command from phone/group", {
     group: groupId,
     sender: message.author ?? message.from,
     fromMe: message.fromMe,
     text: message.body,
+    hasMedia: !!mediaData,
   });
 
   // Step 5: Forward to brain
@@ -196,7 +214,8 @@ async function handleIncomingMessage(message) {
       body: JSON.stringify({
         group_id: groupId,
         sender: message.author ?? message.from,
-        text: message.body,
+        text: message.body || "",
+        media: mediaData,
         from_me: message.fromMe,
         timestamp: message.timestamp,
       }),

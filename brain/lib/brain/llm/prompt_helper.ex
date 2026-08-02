@@ -55,6 +55,23 @@ defmodule Brain.LLM.PromptHelper do
     - Explicit dates/relative days ("depois de amanhã", "daqui a 3 dias") are computed literally
       from the current date above.
 
+    ## Implicit shopping needs (not explicit commands)
+    Some messages don't use command wording at all, but describe something that ran out, is
+    missing, or is already finished at home. Treat these as add_item too, not ignore:
+    - "acabou o/a X" / "acabaram os/as X" (X ran out) -> add_item, item: X
+    - "já não há X" / "não temos X" / "estamos sem X" -> add_item, item: X
+    - "falta X" (em casa) -> add_item, item: X
+
+    When extracting X, strip leading articles/quantifiers ("o", "a", "os", "as", "um", "uma") but
+    keep the rest of the noun phrase exactly as written (brand names, flavours, etc. included).
+    Only classify this way when the message is clearly about a specific product/foodstuff running
+    out — venting, jokes without a nameable product, or ambiguous phrasing should stay `ignore`.
+    Since this is inferred rather than an explicit command, use a slightly lower confidence
+    (around 0.6-0.8) than you would for an explicit "adiciona X".
+
+    Example: "Uii estava aqui a comer o panado e acabou o Tabasco chipotle, não pode ser"
+    -> {"action": "add_item", "item": "Tabasco chipotle", "task": "", "datetime": "", "confidence": 0.75}
+
     ## Domain knowledge for specific reminder topics
     Some tasks have a known real-world delay before the action is even possible. When the user asks
     to be reminded about one of these WITHOUT specifying a time, use the domain default instead of
@@ -88,6 +105,9 @@ defmodule Brain.LLM.PromptHelper do
   defp format_datetime(dt), do: Calendar.strftime(dt, "%Y-%m-%d %H:%M (%A)")
   defp format_weekday(dt), do: Calendar.strftime(dt, "%A")
 
+  # Calendar.strftime/2 only supports %z ("+0100", no colon) — there is no
+  # %:z directive in Elixir. Build the colon-separated ISO 8601 offset
+  # (e.g. "+01:00") ourselves from utc_offset + std_offset (both in seconds).
   defp format_offset(dt) do
     total_seconds = dt.utc_offset + dt.std_offset
     sign = if total_seconds < 0, do: "-", else: "+"

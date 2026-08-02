@@ -11,4 +11,12 @@ defmodule Brain.LLM.Provider do
               schema :: map()
             ) ::
               {:ok, map()} | {:error, term()}
+
+  @callback generate_structured_with_media(
+              system_prompt :: String.t(),
+              user_prompt :: String.t(),
+              schema :: map(),
+              media :: %{mimetype: String.t(), data: String.t()}
+            ) ::
+              {:ok, map()} | {:error, term()}
 end

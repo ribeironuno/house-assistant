@@ -23,10 +23,32 @@ defmodule BrainWeb.WebhookController do
 
   @doc """
   Handles an incoming webhook event from the Bridge.
-
-  Delegates text parsing and execution to `Brain.Commands.handle/2`, then
-  calls `send_reply/2` if a reply is produced.
+  Supports text commands and media attachments (invoices/receipts).
   """
+  def create(conn, %{"group_id" => group_id, "sender" => sender, "media" => %{"data" => _data} = media} = params)
+      when not is_nil(media) do
+    Logger.info("[Brain] Media recebido no grupo #{group_id} de #{sender} (#{Map.get(media, "mimetype")})")
+
+    result = Brain.ShoppingList.InvoiceProcessor.process_media(media, sender)
+
+    case result do
+      {:reply, reply_text} ->
+        Brain.WhatsApp.BridgeClient.send_message(group_id, reply_text)
+
+      :ignore ->
+        text = Map.get(params, "text", "")
+
+        if text != "" do
+          case Brain.Commands.handle(text, sender, group_id) do
+            {:reply, reply_text} -> Brain.WhatsApp.BridgeClient.send_message(group_id, reply_text)
+            :ignore -> :ok
+          end
+        end
+    end
+
+    json(conn, %{status: "ok"})
+  end
+
   def create(conn, %{"group_id" => group_id, "sender" => sender, "text" => text}) do
     Logger.info("[Brain] Mensagem recebida no grupo #{group_id} de #{sender}: #{inspect(text)}")
 
