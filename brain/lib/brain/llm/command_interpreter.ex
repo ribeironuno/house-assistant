@@ -21,6 +21,13 @@ defmodule Brain.LLM.CommandInterpreter do
           "list_items",
           "clear_items",
           "set_reminder",
+          "add_pantry_items",
+          "remove_pantry_item",
+          "list_pantry",
+          "clear_pantry",
+          "generate_menu",
+          "get_recipe",
+          "rate_meal",
           "help",
           "ignore"
         ]
@@ -29,7 +36,9 @@ defmodule Brain.LLM.CommandInterpreter do
       items: %{type: "array", items: %{type: "string"}},
       item: %{type: "string"},
       reminder_text: %{type: "string"},
-      reminder_time_phrase: %{type: "string"}
+      reminder_time_phrase: %{type: "string"},
+      constraints: %{type: "string"},
+      sentiment: %{type: "string"}
     },
     required: ["action", "confidence"]
   }
@@ -96,6 +105,58 @@ defmodule Brain.LLM.CommandInterpreter do
   end
 
   defp to_canonical_command(%{"action" => "ignore"}), do: :ignore
+
+  defp to_canonical_command(%{"action" => "add_pantry_items", "items" => items})
+       when is_list(items) do
+    clean_items =
+      items
+      |> Enum.map(&to_string/1)
+      |> Enum.map(&String.trim/1)
+      |> Enum.reject(&(&1 == ""))
+
+    case clean_items do
+      [] -> :ignore
+      items_list -> {:ok, {:add_pantry_items, items_list}}
+    end
+  end
+
+  defp to_canonical_command(%{"action" => "remove_pantry_item", "item" => item})
+       when is_binary(item) do
+    case String.trim(item) do
+      "" -> :ignore
+      trimmed -> {:ok, {:remove_pantry_item, trimmed}}
+    end
+  end
+
+  defp to_canonical_command(%{"action" => "list_pantry"}), do: {:ok, :list_pantry}
+  defp to_canonical_command(%{"action" => "clear_pantry"}), do: {:ok, :clear_pantry}
+
+  defp to_canonical_command(%{"action" => "generate_menu", "constraints" => constraints})
+       when is_binary(constraints) do
+    {:ok, {:generate_menu, String.trim(constraints)}}
+  end
+
+  defp to_canonical_command(%{"action" => "generate_menu"}) do
+    {:ok, {:generate_menu, ""}}
+  end
+
+  defp to_canonical_command(%{"action" => "get_recipe", "item" => item}) when is_binary(item) do
+    case String.trim(item) do
+      "" -> :ignore
+      trimmed -> {:ok, {:get_recipe, trimmed}}
+    end
+  end
+
+  defp to_canonical_command(%{"action" => "rate_meal", "item" => item, "sentiment" => sentiment})
+       when is_binary(item) and is_binary(sentiment) do
+    case {String.trim(item), String.trim(sentiment)} do
+      {"", _} -> :ignore
+      {_, ""} -> :ignore
+      {meal, s} when s in ["like", "dislike"] -> {:ok, {:rate_meal, meal, s}}
+      _ -> :ignore
+    end
+  end
+
   defp to_canonical_command(_), do: :ignore
 
   defp log_and_ignore(reason) do

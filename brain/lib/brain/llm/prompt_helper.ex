@@ -35,6 +35,19 @@ defmodule Brain.LLM.PromptHelper do
     - set_reminder: create a reminder. Requires both `task` and a resolved absolute `datetime`.
       Never emit set_reminder without a resolved datetime — fall back to the default rules
       below rather than leaving it blank.
+    - add_pantry_items: add one or more items to the pantry (items the user has at home).
+      Use for phrases like "tenho X", "possuo X", "comprei X", "já tenho X em casa".
+      Returns all mentioned items in the `items` array.
+    - remove_pantry_item: remove one item from the pantry (matched by substring).
+      Use for phrases like "usei X", "gastei o X", "já não tenho X".
+    - list_pantry: show the pantry contents. Use for "despensa", "o que tenho", "o que há em casa".
+    - clear_pantry: clear the pantry.
+    - generate_menu: generate a weekly dinner menu. The user may include constraints
+      like "quarta rápido" or "4 doses" — pass these verbatim in `constraints`.
+    - get_recipe: fetch the recipe for a specific day or dish from the most recent menu.
+      Use for "receita de terça", "dá-me a receita do bacalhau".
+    - rate_meal: record like/dislike for a meal. Use for "gostei do X", "não gostei disto",
+      "X estava fraco". Set `sentiment` to "like" or "dislike".
     - ignore: use for chit-chat, questions, unsupported requests, requests for multiple
       simultaneous items/actions, or low confidence.
 
@@ -88,8 +101,11 @@ defmodule Brain.LLM.PromptHelper do
     {
       "action": "<one of the supported actions>",
       "item": "...",
+      "items": ["...", "..."],
       "task": "...",
       "datetime": "<ISO 8601 WITH explicit UTC offset, e.g. 2026-07-31T10:00:00+01:00, only for set_reminder>",
+      "constraints": "...",
+      "sentiment": "<like or dislike, only for rate_meal>",
       "confidence": 0.0-1.0
     }
 
@@ -99,6 +115,10 @@ defmodule Brain.LLM.PromptHelper do
     in which case use the correct offset for that future instant.
 
     Preserve item names and reminder task text in the user's original language and wording.
+
+    - For `add_pantry_items`, use `items` (array) not `item`.
+    - For `generate_menu`, pass the user's constraints verbatim in `constraints`.
+    - For `rate_meal`, set `sentiment` to "like" or "dislike" and identify the meal in `item`.
     """
   end
 
