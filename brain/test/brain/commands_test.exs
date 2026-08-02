@@ -115,6 +115,12 @@ defmodule Brain.CommandsTest do
     assert reply =~ "remove <item>"
     assert reply =~ "lista"
     assert reply =~ "limpar lista"
+    assert reply =~ "tenho <item>"
+    assert reply =~ "usei <item>"
+    assert reply =~ "o que tenho na despensa?"
+    assert reply =~ "faz-me o menu da semana"
+    assert reply =~ "receita de <dia>"
+    assert reply =~ "gostei de <prato>"
     assert reply =~ "lembrar de <tarefa> daqui a N minutos/horas/dias/semanas"
 
     assert {:reply, ^reply} = Commands.handle("help", "user_1")

@@ -18,6 +18,17 @@ defmodule Brain.Commands do
              - lista
              - limpar lista
 
+             🏠 Despensa
+             - tenho <item> ou tenho <item>, <item>
+             - usei <item>
+             - o que tenho na despensa?
+             - limpar despensa
+
+             🍽️ Menu da Semana
+             - faz-me o menu da semana
+             - receita de <dia>
+             - gostei de <prato> / não gostei de <prato>
+
              🔔 Lembretes
              - lembrar de <tarefa> logo
              - lembrar de <tarefa> amanhã
@@ -92,6 +103,35 @@ defmodule Brain.Commands do
 
   defp fallback_to_llm(trimmed_raw, sender, group_id) do
     case Brain.LLM.CommandInterpreter.interpret(trimmed_raw) do
+      {:ok, {:add_pantry_items, items}} ->
+        Brain.Pantry.add_many(items, sender)
+
+      {:ok, {:remove_pantry_item, item}} ->
+        Brain.Pantry.remove(item)
+
+      {:ok, :list_pantry} ->
+        Brain.Pantry.list()
+
+      {:ok, :clear_pantry} ->
+        Brain.Pantry.clear()
+
+      {:ok, {:generate_menu, constraints}} ->
+        Brain.MenuPlanner.generate(constraints, group_id)
+
+      {:ok, {:get_recipe, item}} ->
+        Brain.MenuPlanner.get_recipe(item, group_id)
+
+      {:ok, {:rate_meal, meal, sentiment}} ->
+        Brain.MealFeedback.create(%{
+          group_id: group_id,
+          meal_name: meal,
+          sentiment: sentiment,
+          raw_text: trimmed_raw
+        })
+
+        sentiment_text = if sentiment == "like", do: "gostei", else: "não gostei"
+        {:reply, "[BOT] 📝 Registado: #{sentiment_text} de #{meal}."}
+
       {:ok, canonical_command} ->
         route(canonical_command, String.downcase(canonical_command), sender, group_id, true)
 
