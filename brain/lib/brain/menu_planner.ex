@@ -123,7 +123,7 @@ defmodule Brain.MenuPlanner do
 
   defp format_summary(meals) do
     header = "[BOT] 🍽️ Menu da Semana"
-    days = Enum.map_join(meals, "\n", &format_day_line/1)
+    days = Enum.map_join(meals, "\n\n", &format_day_line/1)
 
     shopping =
       meals
