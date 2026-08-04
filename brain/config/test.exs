@@ -22,7 +22,8 @@ config :logger, level: :warning
 
 config :brain,
   start_reminder_dispatcher: false,
-  send_outgoing_messages: false
+  send_outgoing_messages: false,
+  llm_provider: Brain.LLM.Providers.TestStub
 
 # Initialize plugs at runtime for faster test compilation
 config :phoenix, :plug_init_mode, :runtime

@@ -51,7 +51,8 @@ defmodule Brain.ShoppingList.InvoiceProcessor do
             |> Enum.reject(&(&1 == ""))
 
           if clean_items == [] do
-            {:reply, "[BOT] 🧾 Li a imagem, mas não consegui identificar nenhum produto da fatura."}
+            {:reply,
+             "[BOT] 🧾 Li a imagem, mas não consegui identificar nenhum produto da fatura."}
           else
             match_and_remove(clean_items)
           end
@@ -79,7 +80,8 @@ defmodule Brain.ShoppingList.InvoiceProcessor do
   defp call_vision_provider(media) do
     user_prompt = "Por favor analisa esta fatura/recibo e extrai a lista de produtos comprados."
 
-    if function_exported?(provider(), :generate_structured_with_media, 4) do
+    if Code.ensure_loaded?(provider()) and
+         function_exported?(provider(), :generate_structured_with_media, 4) do
       provider().generate_structured_with_media(@system_prompt, user_prompt, @schema, media)
     else
       {:error, :media_not_supported_by_provider}
@@ -95,20 +97,25 @@ defmodule Brain.ShoppingList.InvoiceProcessor do
 
     if active_items == [] do
       formatted_extracted = Enum.map_join(purchased_items, "\n", &"• #{&1}")
-      {:reply, "[BOT] 🧾 Fatura lida com sucesso!\n\n🛒 A tua lista de compras estava vazia, por isso nenhum item foi removido.\n\nProdutos na fatura:\n#{formatted_extracted}"}
+
+      {:reply,
+       "[BOT] 🧾 Fatura lida com sucesso!\n\n🛒 A tua lista de compras estava vazia, por isso nenhum item foi removido.\n\nProdutos na fatura:\n#{formatted_extracted}"}
     else
       {removed_db_items, unmatched_receipt_items} = find_matches(active_items, purchased_items)
 
       if removed_db_items == [] do
         formatted_receipt = Enum.take(purchased_items, 5) |> Enum.join(", ")
-        {:reply, "[BOT] 🧾 Fatura lida (#{formatted_receipt}), mas nenhum dos produtos comprados estava na tua lista de compras."}
+
+        {:reply,
+         "[BOT] 🧾 Fatura lida (#{formatted_receipt}), mas nenhum dos produtos comprados estava na tua lista de compras."}
       else
         ShoppingList.delete_items(removed_db_items)
 
         removed_names = Enum.map(removed_db_items, & &1.name)
         formatted_removed = Enum.map_join(removed_names, "\n", &"• #{&1}")
 
-        msg = "[BOT] 🧾 Fatura processada!\n\n🗑️ Removidos da lista de compras:\n#{formatted_removed}"
+        msg =
+          "[BOT] 🧾 Fatura processada!\n\n🗑️ Removidos da lista de compras:\n#{formatted_removed}"
 
         final_msg =
           if unmatched_receipt_items == [] do
@@ -125,12 +132,36 @@ defmodule Brain.ShoppingList.InvoiceProcessor do
 
   @doc """
   Finds matching DB shopping list items given a list of purchased items from a receipt.
+  Uses fast string matching first, then LLM semantic matching for remaining unmatched pairs.
   Returns `{matched_db_items, unmatched_receipt_items}`.
   """
   def find_matches(active_items, purchased_items) do
+    {string_matched, unmatched_db, unmatched_receipt} =
+      string_match(active_items, purchased_items)
+
+    do_find_matches(unmatched_db, unmatched_receipt, string_matched, unmatched_receipt)
+  end
+
+  defp do_find_matches([], [], string_matched, unmatched_receipt) do
+    {string_matched, unmatched_receipt}
+  end
+
+  defp do_find_matches(unmatched_db, unmatched_receipt, string_matched, unmatched_receipt) do
+    case llm_semantic_match(unmatched_db, unmatched_receipt) do
+      {:ok, additional_db_matches, matched_receipt_names} ->
+        final_matched = string_matched ++ additional_db_matches
+        final_unmatched = unmatched_receipt -- matched_receipt_names
+        {final_matched, final_unmatched}
+
+      :error ->
+        {string_matched, unmatched_receipt}
+    end
+  end
+
+  defp string_match(active_items, purchased_items) do
     purchased_normalized = Enum.map(purchased_items, &normalize/1)
 
-    {matched_db_items, _unmatched_db_items} =
+    {matched_db_items, unmatched_db_items} =
       Enum.split_with(active_items, fn db_item ->
         item_norm = normalize(db_item.name)
 
@@ -148,14 +179,77 @@ defmodule Brain.ShoppingList.InvoiceProcessor do
         end)
       end)
 
-    {matched_db_items, unmatched_receipt}
+    {matched_db_items, unmatched_db_items, unmatched_receipt}
+  end
+
+  @doc """
+  Uses LLM to semantically match unmatched items (e.g., "piripiri" <-> "tabasco chipotle").
+  Returns `{:ok, matched_db_items, matched_receipt_names}` or `:error`.
+  """
+  def llm_semantic_match(unmatched_db_items, unmatched_receipt_items) do
+    db_names = Enum.map(unmatched_db_items, & &1.name)
+
+    prompt = """
+    Dada uma lista de compras e itens de uma fatura, identifique quais itens da lista de compras correspondem semanticamente aos itens da fatura, mesmo que os nomes sejam diferentes.
+
+    Lista de compras: #{inspect(db_names)}
+    Itens da fatura: #{inspect(unmatched_receipt_items)}
+
+    Retorne apenas os nomes exatos da lista de compras que têm correspondência semântica com algum item da fatura, e qual item da fatura corresponde.
+    Exemplos de correspondências semânticas: "piripiri" <-> "tabasco", "molho picante" <-> "sriracha", "azeite" <-> "azeite virgem extra".
+
+    Retorne um JSON com os pares de correspondência. Se não houver correspondências, retorne listas vazias.
+    """
+
+    schema = %{
+      type: "object",
+      properties: %{
+        matches: %{
+          type: "array",
+          items: %{
+            type: "object",
+            properties: %{
+              list_item: %{type: "string", description: "Nome exato da lista de compras"},
+              receipt_item: %{type: "string", description: "Nome exato do item da fatura"}
+            },
+            required: ["list_item", "receipt_item"]
+          }
+        }
+      },
+      required: ["matches"]
+    }
+
+    if Code.ensure_loaded?(provider()) and
+         function_exported?(provider(), :generate_structured, 3) do
+      case provider().generate_structured(
+             "Você é um assistente que identifica correspondências semânticas entre itens de supermercado em português.",
+             prompt,
+             schema
+           ) do
+        {:ok, %{"matches" => matches}} when is_list(matches) ->
+          matched_receipt_names = Enum.map(matches, & &1["receipt_item"])
+
+          matched_db_items =
+            Enum.filter(unmatched_db_items, fn db_item ->
+              Enum.any?(matches, fn m -> m["list_item"] == db_item.name end)
+            end)
+
+          {:ok, matched_db_items, matched_receipt_names}
+
+        _ ->
+          :error
+      end
+    else
+      :error
+    end
   end
 
   @doc """
   Determines if an item on the shopping list matches an item on the receipt.
   Checks exact equality, substring match, and word overlap.
   """
-  def items_match?(item_norm, receipt_norm) when is_binary(item_norm) and is_binary(receipt_norm) do
+  def items_match?(item_norm, receipt_norm)
+      when is_binary(item_norm) and is_binary(receipt_norm) do
     cond do
       item_norm == receipt_norm ->
         true
@@ -174,8 +268,13 @@ defmodule Brain.ShoppingList.InvoiceProcessor do
   def items_match?(_, _), do: false
 
   defp word_overlap?(a, b) do
-    words_a = String.split(a) |> Enum.reject(&(&1 in ["de", "do", "da", "dos", "das", "e", "em", "para", "com"]))
-    words_b = String.split(b) |> Enum.reject(&(&1 in ["de", "do", "da", "dos", "das", "e", "em", "para", "com"]))
+    words_a =
+      String.split(a)
+      |> Enum.reject(&(&1 in ["de", "do", "da", "dos", "das", "e", "em", "para", "com"]))
+
+    words_b =
+      String.split(b)
+      |> Enum.reject(&(&1 in ["de", "do", "da", "dos", "das", "e", "em", "para", "com"]))
 
     if words_a == [] or words_b == [] do
       false

@@ -62,4 +62,25 @@ defmodule Brain.ShoppingList.InvoiceProcessorTest do
     assert Enum.map(matched, & &1.name) == ["leite", "ovos frescos"]
     assert unmatched == ["chocolates"]
   end
+
+  test "llm_semantic_match degrades to :error when provider fails" do
+    items = [%Item{id: 1, name: "piripiri"}]
+    receipt = ["tabasco chipotle"]
+
+    assert InvoiceProcessor.llm_semantic_match(items, receipt) == :error
+  end
+
+  test "find_matches falls back to string-only matches when LLM errors" do
+    items = [
+      %Item{id: 1, name: "leite"},
+      %Item{id: 2, name: "piripiri"}
+    ]
+
+    receipt = ["leite", "tabasco chipotle"]
+
+    {matched, unmatched} = InvoiceProcessor.find_matches(items, receipt)
+
+    assert Enum.map(matched, & &1.name) == ["leite"]
+    assert unmatched == ["tabasco chipotle"]
+  end
 end
