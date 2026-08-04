@@ -1,18 +1,29 @@
 # Brain
 
-To start your Phoenix server:
+Elixir/Phoenix application that powers the House Assistant WhatsApp bot. It receives
+messages from the Bridge, classifies commands, reads/writes Postgres, calls Google Gemini
+for LLM features, and replies through the Bridge.
 
-* Run `mix setup` to install and setup dependencies
-* Start Phoenix endpoint with `mix phx.server` or inside IEx with `iex -S mix phx.server`
+See the root [`README.md`](../README.md) for setup and the full feature list.
 
-Now you can visit [`localhost:4000`](http://localhost:4000) from your browser.
+## Documentation
 
-Ready to run in production? Please [check our deployment guides](https://hexdocs.pm/phoenix/deployment.html).
+Detailed documentation lives in **[`DOCS.md`](DOCS.md)**: message flow, command routing,
+every feature (shopping list, receipts, pantry, reminders, menu planner), the LLM layer,
+configuration, and the module layout.
 
-## Learn more
+## Quick start
 
-* Official website: https://www.phoenixframework.org/
-* Guides: https://hexdocs.pm/phoenix/overview.html
-* Docs: https://hexdocs.pm/phoenix
-* Forum: https://elixirforum.com/c/phoenix-forum
-* Source: https://github.com/phoenixframework/phoenix
+```bash
+mix setup
+mix phx.server        # or: iex -S mix phx.server
+```
+
+The server listens on `http://localhost:4000`. The Bridge posts incoming WhatsApp
+messages to `POST /webhook/whatsapp`.
+
+## Tests
+
+```bash
+mix test              # 88 tests — LLM calls are stubbed, no network / tokens
+```

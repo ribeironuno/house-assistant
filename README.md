@@ -1,69 +1,138 @@
 # 🏠 House Assistant — WhatsApp Family Bot
 
-A self-hosted WhatsApp assistant for the family group. It manages a shared **shopping list** and scheduled **reminders** backed by Postgres, understands commands in **Portuguese**, and is designed to be extended with menus and an LLM layer in future phases.
+A self-hosted WhatsApp assistant for the family group. It runs a shared **shopping list**,
+**scheduled reminders**, a **pantry** inventory, and a **weekly menu planner** backed by
+Postgres — and it understands commands in **Portuguese**. It can even **read receipt photos**
+and remove bought items from the shopping list automatically.
+
+---
+
+## Features
+
+| Feature | What it does |
+|---|---|
+| 🛒 **Shopping list** | Add, remove, list and clear items with plain Portuguese commands |
+| 🔔 **Reminders** | "lembrar de pagar scouts daqui a 3 dias" → posts the reminder at the right time |
+| 🧾 **Receipt photos** | Send a photo of a supermarket receipt → Gemini extracts the products → bought items are removed from the list |
+| 🏪 **Pantry** | Track what's at home ("tenho arroz, frango") |
+| 🍽️ **Weekly menu** | "faz-me o menu da semana" → 7 days of dinner ideas + recipes, using your pantry and taste preferences |
+| 🤖 **LLM fallback** | Any unrecognised message is classified by Gemini into one of 14 actions, so natural phrasing works |
 
 ---
 
 ## Architecture
 
 ```
-┌─────────────────────┐        Baileys protocol        ┌───────────────────────┐
-│   WhatsApp Group    │ ◄─────────────────────────────► │   Bridge (Node.js)    │
-└─────────────────────┘                                 └──────────┬────────────┘
-                                                                   │
-                                              POST /webhook  │  POST /send
-                                              (incoming)     │  (outgoing)
-                                                             ▼
-                                                  ┌───────────────────────┐
-                                                  │   Brain (Elixir /     │
-                                                  │   Phoenix + Ecto)     │
-                                                  └──────────┬────────────┘
-                                                             │  SQL (Ecto)
-                                                             ▼
-                                                  ┌───────────────────────┐
-                                                  │   PostgreSQL (Docker) │
-                                                  └───────────────────────┘
+┌─────────────────────┐   whatsapp-web.js   ┌───────────────────────────┐
+│   WhatsApp Group    │ ◄─────────────────► │  Bridge (Node.js)         │
+└─────────────────────┘                     └────────────┬──────────────┘
+                                                         │  POST /webhook/whatsapp (incoming)
+                                                         │  POST /send (outgoing)
+                                                         ▼
+                                              ┌───────────────────────────┐
+                                              │  Brain (Elixir / Phoenix) │
+                                              │  commands + LLM (Gemini)  │
+                                              └────────────┬──────────────┘
+                                                         │  SQL (Ecto)
+                                                         ▼
+                                              ┌───────────────────────────┐
+                                              │  PostgreSQL (Docker)      │
+                                              └───────────────────────────┘
 ```
 
 ### Components
 
 | Service | Tech | Role |
 |---|---|---|
-| **Bridge** | Node.js + whatsapp-web.js | Speaks the WhatsApp Web protocol. Forwards incoming group messages to the brain via `POST /webhook/whatsapp`. Sends replies back via `POST /send`. Has no intelligence of its own. |
-| **Brain** | Elixir / Phoenix | Receives messages, parses commands, reads/writes Postgres, schedules due reminders, and calls the bridge to reply. All business logic lives here. |
-| **DB** | PostgreSQL 16 | Stores the shopping list (`shopping_items` table) and reminders (`reminders` table). Managed by Ecto migrations. |
+| **Bridge** | Node.js + whatsapp-web.js | Speaks the WhatsApp Web protocol. Forwards incoming group messages to the Brain via `POST /webhook/whatsapp` and sends replies back via `POST /send`. No business logic. |
+| **Brain** | Elixir / Phoenix | Receives messages, classifies commands (rule-based first, LLM fallback), reads/writes Postgres, schedules reminders, calls Gemini for invoices/menus, and replies via the bridge. |
+| **DB** | PostgreSQL 16 | Stores shopping list, reminders, pantry, menus and meal feedback. Managed by Ecto migrations. |
+
+---
+
+## How messages are handled
+
+1. A message arrives at the Bridge (`message_create` event).
+2. The Bridge drops bot echoes (loop prevention) and forwards the rest to the Brain.
+3. The Brain tries in order:
+   - **Explicit commands** (`adiciona`, `remove`, `lista`, `lembrar`, `ajuda`, …)
+   - **LLM classifier** — Gemini maps any other message to one of 14 actions
+4. The Brain replies with a `[BOT]`-prefixed message via the bridge.
+
+> Full technical details, database schema and module layout live in [`brain/DOCS.md`](brain/DOCS.md).
 
 ---
 
 ## Loop Prevention
 
-Because the bridge and the owner's phone share the same WhatsApp account, every bot reply also fires a `message_create` event. The system avoids infinite loops at two independent layers:
+The bridge and the owner's phone share the same WhatsApp account, so every bot reply also
+fires a `message_create` event. Two independent layers prevent infinite loops:
 
-1. **Bridge** — `isBridgeSelfMessage()` checks if the incoming message body starts with `[BOT]` and drops it immediately, before forwarding to the brain.
-2. **Brain** — `Brain.Commands.handle/2` checks the same prefix and returns `:ignore`, so even if a bot echo slips through, it is never acted on.
+1. **Bridge** — `isBridgeSelfMessage()` drops messages that start with `[BOT]`, match a
+   recently-sent message ID, or match recently-sent text (60-second window).
+2. **Brain** — `Brain.Commands.handle/3` checks the `[BOT]` prefix again as a safety net.
 
-All bot replies are prefixed with `[BOT]` (e.g. `[BOT] ✅ Adicionado: leite`).
+All bot replies are prefixed `[BOT]` (e.g. `[BOT] ✅ Adicionado: leite`).
 
-> **Note on `fromMe` messages**: whatsapp-web.js swaps `message.from` / `message.to` for self-sent messages. The bridge resolves the real group ID as `message.fromMe ? message.to : message.from` before forwarding.
+> **Note on `fromMe` messages**: whatsapp-web.js swaps `message.from` / `message.to` for
+> self-sent messages. The bridge resolves the real group ID as `message.fromMe ? message.to : message.from`.
 
 ---
 
 ## Commands (Portuguese)
 
-The assistant is case-insensitive and ignores all unrecognised messages silently.
+The assistant is case-insensitive and silently ignores unrecognised messages.
+
+### Shopping list
 
 | Command | Example | Bot reply |
 |---|---|---|
-| `adiciona <item>` / `adicionar <item>[, <item>]` | `adiciona leite, pão, manteiga` | `[BOT] ✅ Adicionados:\n1. leite\n2. pão\n3. manteiga` |
-| `remove <item>` / `remover <item>` | `remove leite` | `[BOT] 🗑️ Removido: leite` |
-| `lista` / `ver lista` / `mostrar lista` | `lista` | `[BOT] 🛒 Lista de Compras:\n1. leite\n...` |
-| `limpar` / `limpar lista` | `limpar lista` | `[BOT] 🧹 Lista de compras limpa.` |
-| `lembrar de <tarefa> logo` | `lembrar de fazer isto logo` | `[BOT] 🔔 Lembrete guardado: fazer isto (...)` |
-| `lembrar de <tarefa> daqui a N minutos/horas/dias/semanas` | `lembrar de pagar scouts daqui a 3 dias` | `[BOT] 🔔 Lembrete guardado: pagar scouts (...)` |
-| `lembra-me de <tarefa> amanhã` | `lembra-me de pagar a água amanhã` | `[BOT] 🔔 Lembrete guardado: pagar a água (...)` |
-| `ajuda` / `help` / `comandos` | `ajuda` | Lista os comandos conhecidos |
+| `adiciona <item>[, <item>]` | `adiciona leite, pão, manteiga` | `[BOT] ✅ Adicionados:\n1. leite\n2. pão\n3. manteiga` |
+| `remove <item>` | `remove leite` | `[BOT] 🗑️ Removido: leite` |
+| `lista` / `ver lista` | `lista` | `[BOT] 🛒 Lista de Compras:\n1. leite\n…` |
+| `limpar lista` | `limpar lista` | `[BOT] 🧹 Lista de compras limpa.` |
 
-Due reminders are sent back to the original WhatsApp group as `[BOT] 🔔 Lembrete: <tarefa>`.
+Items are matched by substring — `remove leite` also removes `Leite Gordo`.
+
+### Reminders
+
+| Command | Example | Fires at |
+|---|---|---|
+| `lembrar de <tarefa> daqui a N minutos/horas/dias/semanas` | `lembrar de pagar scouts daqui a 3 dias` | Now + N units |
+| `lembra-me de <tarefa> amanhã` | `lembra-me de pagar a água amanhã` | Tomorrow at 10:00 |
+| `lembrar de <tarefa> logo` | `lembrar de fazer isto logo` | Today at 19:00 (21:00 after 18:00) |
+| `lembrar de <tarefa> à sexta` / `às 18h` | `lembrar de ligar à avó à sexta` | Next occurrence |
+
+Due reminders are posted back to the group as `[BOT] 🔔 Lembrete: <tarefa>`.
+
+### Pantry & menu
+
+| Command | Example | What happens |
+|---|---|---|
+| `tenho <item>[, <item>]` / `comprei <item>` | `tenho arroz, frango` | Adds to pantry |
+| `usei <item>` | `usei o arroz` | Removes from pantry |
+| `o que tenho na despensa?` | `o que tenho na despensa?` | Shows pantry contents |
+| `faz-me o menu da semana` | `faz-me o menu da semana` | Generates a 7-day dinner menu + recipes |
+| `receita de <dia>` | `receita de terça` | Shows the stored recipe for that day |
+| `gostei de <prato>` / `não gostei de <prato>` | `não gostei da feijoada` | Records a preference for future menus |
+
+### Help
+
+`ajuda` / `help` / `comandos` lists the known commands.
+
+---
+
+## Receipt photos
+
+Send a **photo of a supermarket receipt** and the bot will:
+
+1. Send the image to Gemini (vision) and extract the product names.
+2. Match them against your active shopping list:
+   - exact and substring match first (free),
+   - then one LLM call for semantically different names (e.g. list has `piripiri`, receipt says `tabasco chipotle`).
+3. Delete the bought items and reply with what was removed.
+
+No extra command is needed — just send the photo to the group.
 
 ---
 
@@ -71,37 +140,43 @@ Due reminders are sent back to the original WhatsApp group as `[BOT] 🔔 Lembre
 
 - [Docker Engine & Docker Compose](https://docs.docker.com/get-docker/)
 - [Elixir 1.15+](https://elixir-lang.org/) & [Node.js 20+](https://nodejs.org/) (dev mode only)
+- A [Google Gemini API key](https://aistudio.google.com/app/apikey) (free tier) — required for the LLM features
 
 ---
 
-## Running Locally (recommended)
+## Running locally (recommended)
 
-Only Postgres runs in Docker. The bridge and brain run directly on your machine — faster iteration, no rebuild needed.
+Only Postgres runs in Docker. The bridge and brain run directly on your machine.
 
-### 1. Start Postgres
+### 1. Configure
+
+```bash
+cp .env.example .env      # then set TARGET_GROUP_ID
+export GEMINI_API_KEY=your_key
+```
+
+### 2. Start Postgres
 
 ```bash
 docker compose up -d db
 ```
 
-### 2. Set up & start the Brain
+### 3. Set up & start the Brain
 
 ```bash
 cd brain
 mix deps.get
-mix ecto.setup      # creates DB + runs migrations
+mix ecto.setup            # creates DB + runs migrations
+mix phx.server            # or: iex -S mix phx.server
 ```
 
-Then start it in your preferred way (e.g. `iex -S mix phx.server`).
-
-### 3. Start the Bridge
+### 4. Start the Bridge
 
 ```bash
 cd bridge
 npm install
+node index.js             # scan the QR code on first run
 ```
-
-Then start it (e.g. `node index.js`). Scan the QR code on first run.
 
 ---
 
@@ -115,7 +190,7 @@ docker compose up --build
 
 ---
 
-## Environment Variables
+## Environment variables
 
 ### Bridge
 
@@ -123,15 +198,16 @@ docker compose up --build
 |---|---|---|
 | `PORT` | `3000` | Port the bridge HTTP server listens on |
 | `ELIXIR_WEBHOOK_URL` | `http://localhost:4000/webhook/whatsapp` | Where to forward incoming messages |
-| `TARGET_GROUP_ID` | *(empty — accept all)* | WhatsApp group JID to filter messages (e.g. `120363...@g.us`) |
+| `TARGET_GROUP_ID` | configured group JID | WhatsApp group JID to filter messages (e.g. `120363…@g.us`) |
 
 ### Brain
 
 | Variable | Default | Description |
 |---|---|---|
+| `GEMINI_API_KEY` | *(none — required)* | Google Gemini API key |
+| `GEMINI_MODEL` | `gemini-flash-latest` | Which Gemini model to use |
 | `BRIDGE_SEND_URL` | `http://localhost:3000/send` | Bridge endpoint for outgoing messages |
-| `REMINDER_DISPATCH_INTERVAL_MS` | `60000` | Reminder polling interval, if configured in Elixir runtime |
-| `DATABASE_URL` | *(from config/dev.exs)* | Postgres connection string |
+| `DATABASE_URL` | *(from config)* | Postgres connection string |
 | `PHX_SERVER` | — | Set to `true` in Docker to auto-start the server |
 
 Copy `.env.example` to `.env` and fill in `TARGET_GROUP_ID` for your family group.
@@ -149,6 +225,16 @@ mix ecto.migrate   # run migrations
 mix ecto.reset     # drop + recreate + migrate
 ```
 
+### Tables
+
+| Table | Purpose |
+|---|---|
+| `shopping_items` | Grocery list items |
+| `reminders` | Scheduled reminders with fire time |
+| `pantry_items` | Food items currently at home |
+| `weekly_menus` | Generated menus with full recipes (JSON) |
+| `meal_feedback` | Like/dislike records per dish |
+
 ### Inspect directly
 
 ```bash
@@ -156,7 +242,7 @@ docker exec -it whatsapp_db psql -U postgres -d house_assistant_dev
 ```
 
 ```sql
-SELECT id, name, added_by, done, inserted_at FROM shopping_items;
+SELECT id, name, added_by, done FROM shopping_items;
 SELECT id, text, group_id, remind_at, sent_at FROM reminders ORDER BY remind_at;
 ```
 
@@ -169,7 +255,24 @@ cd brain
 mix test
 ```
 
-15 tests covering command parsing, DB persistence, and webhook routing.
+88 tests covering command parsing, DB persistence, webhook routing, invoice matching,
+LLM classification and menu generation. LLM calls are stubbed in tests — they never hit
+the network or spend tokens.
+
+---
+
+## Project layout
+
+```
+house_assistant/
+├── bridge/        # Node.js whatsapp-web.js bridge (src/ split into modules)
+├── brain/         # Elixir / Phoenix application
+│   ├── lib/       # commands, shopping list, pantry, reminders, menu, LLM providers
+│   ├── test/      # 88 tests
+│   └── DOCS.md    # detailed architecture & feature documentation
+├── docker-compose.yml
+└── .env.example
+```
 
 ---
 
@@ -177,7 +280,7 @@ mix test
 
 - [x] Phase 1 — WhatsApp bridge + Phoenix webhook plumbing
 - [x] Phase 2 — Persistent shopping list with Postgres, Portuguese commands
-- [x] Phase 3 — Dynamic reminders (e.g. "lembrar de pagar scouts daqui a 3 dias")
-- [ ] Phase 4 — LLM intent parsing (Groq / Gemini free tier)
-- [ ] Phase 5 — Weekly menu suggestions
+- [x] Phase 3 — Dynamic reminders ("lembrar de … daqui a 3 dias")
+- [x] Phase 4 — LLM intent parsing (Gemini free tier) + pantry + receipt photo processing
+- [x] Phase 5 — Weekly menu suggestions with recipes and preference learning
 - [ ] Phase 6 — Reminder parser improvements for exact dates/times
