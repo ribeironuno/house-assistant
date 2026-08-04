@@ -63,7 +63,7 @@ defmodule Brain.MenuPlannerTest do
     Application.put_env(:brain, :menu_planner_enabled, true)
 
     on_exit(fn ->
-      Application.delete_env(:brain, :llm_provider)
+      Application.put_env(:brain, :llm_provider, Brain.LLM.Providers.TestStub)
       Application.delete_env(:brain, :menu_planner_enabled)
     end)
   end

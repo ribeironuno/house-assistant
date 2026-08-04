@@ -1,6 +1,7 @@
 defmodule Brain.ShoppingList.InvoiceProcessorTest do
-  use BrainWeb.ConnCase, async: true
+  use BrainWeb.ConnCase, async: false
 
+  alias Brain.LLM.Providers.TestStub
   alias Brain.Repo
   alias Brain.ShoppingList
   alias Brain.ShoppingList.InvoiceProcessor
@@ -8,6 +9,7 @@ defmodule Brain.ShoppingList.InvoiceProcessorTest do
 
   setup do
     :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)
+    on_exit(fn -> TestStub.reset() end)
   end
 
   test "match_and_remove matches receipt items against DB and removes them" do
@@ -76,6 +78,92 @@ defmodule Brain.ShoppingList.InvoiceProcessorTest do
       %Item{id: 2, name: "piripiri"}
     ]
 
+    receipt = ["leite", "tabasco chipotle"]
+
+    {matched, unmatched} = InvoiceProcessor.find_matches(items, receipt)
+
+    assert Enum.map(matched, & &1.name) == ["leite"]
+    assert unmatched == ["tabasco chipotle"]
+  end
+
+  test "find_matches uses LLM to match semantically different item pairs" do
+    TestStub.set_response(
+      {:ok, %{"matches" => [%{"list_item" => "piripiri", "receipt_item" => "tabasco chipotle"}]}}
+    )
+
+    items = [
+      %Item{id: 1, name: "leite"},
+      %Item{id: 2, name: "piripiri"}
+    ]
+
+    receipt = ["leite", "tabasco chipotle"]
+
+    {matched, unmatched} = InvoiceProcessor.find_matches(items, receipt)
+
+    assert Enum.map(matched, & &1.name) == ["leite", "piripiri"]
+    assert unmatched == []
+  end
+
+  test "find_matches accepts receipt_item with different case and removes it from unmatched" do
+    TestStub.set_response(
+      {:ok, %{"matches" => [%{"list_item" => "piripiri", "receipt_item" => "Tabasco Chipotle"}]}}
+    )
+
+    items = [%Item{id: 1, name: "piripiri"}]
+    receipt = ["tabasco chipotle"]
+
+    {matched, unmatched} = InvoiceProcessor.find_matches(items, receipt)
+
+    assert Enum.map(matched, & &1.name) == ["piripiri"]
+    assert unmatched == []
+  end
+
+  test "find_matches rejects LLM pairs whose receipt_item is not on the receipt" do
+    TestStub.set_response(
+      {:ok, %{"matches" => [%{"list_item" => "piripiri", "receipt_item" => "sriracha"}]}}
+    )
+
+    items = [%Item{id: 1, name: "piripiri"}]
+    receipt = ["tabasco chipotle"]
+
+    {matched, unmatched} = InvoiceProcessor.find_matches(items, receipt)
+
+    assert Enum.map(matched, & &1.name) == []
+    assert unmatched == ["tabasco chipotle"]
+  end
+
+  test "find_matches does not consult LLM when receipt side is empty" do
+    TestStub.set_response(
+      {:ok, %{"matches" => [%{"list_item" => "piripiri", "receipt_item" => "tabasco"}]}}
+    )
+
+    items = [%Item{id: 1, name: "leite"}, %Item{id: 2, name: "piripiri"}]
+    receipt = ["leite"]
+
+    {matched, unmatched} = InvoiceProcessor.find_matches(items, receipt)
+
+    assert Enum.map(matched, & &1.name) == ["leite"]
+    assert unmatched == []
+  end
+
+  test "find_matches does not consult LLM when db side is empty" do
+    TestStub.set_response(
+      {:ok, %{"matches" => [%{"list_item" => "leite", "receipt_item" => "tabasco"}]}}
+    )
+
+    items = [%Item{id: 1, name: "leite"}]
+    receipt = ["leite", "tabasco chipotle"]
+
+    {matched, unmatched} = InvoiceProcessor.find_matches(items, receipt)
+
+    assert Enum.map(matched, & &1.name) == ["leite"]
+    assert unmatched == ["tabasco chipotle"]
+  end
+
+  test "find_matches degrades gracefully on malformed LLM response" do
+    TestStub.set_response({:ok, %{"matches" => ["piripiri"]}})
+
+    items = [%Item{id: 1, name: "leite"}, %Item{id: 2, name: "piripiri"}]
     receipt = ["leite", "tabasco chipotle"]
 
     {matched, unmatched} = InvoiceProcessor.find_matches(items, receipt)

@@ -25,9 +25,15 @@ defmodule BrainWeb.WebhookController do
   Handles an incoming webhook event from the Bridge.
   Supports text commands and media attachments (invoices/receipts).
   """
-  def create(conn, %{"group_id" => group_id, "sender" => sender, "media" => %{"data" => _data} = media} = params)
+  def create(
+        conn,
+        %{"group_id" => group_id, "sender" => sender, "media" => %{"data" => _data} = media} =
+          params
+      )
       when not is_nil(media) do
-    Logger.info("[Brain] Media recebido no grupo #{group_id} de #{sender} (#{Map.get(media, "mimetype")})")
+    Logger.info(
+      "[Brain] Media recebido no grupo #{group_id} de #{sender} (#{Map.get(media, "mimetype")})"
+    )
 
     result = Brain.ShoppingList.InvoiceProcessor.process_media(media, sender)
 

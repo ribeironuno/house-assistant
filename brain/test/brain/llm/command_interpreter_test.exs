@@ -25,7 +25,7 @@ defmodule Brain.LLM.CommandInterpreterTest do
 
     on_exit(fn ->
       Application.delete_env(:brain, :llm_command_interpreter_enabled)
-      Application.delete_env(:brain, :llm_provider)
+      Application.put_env(:brain, :llm_provider, Brain.LLM.Providers.TestStub)
     end)
   end
 

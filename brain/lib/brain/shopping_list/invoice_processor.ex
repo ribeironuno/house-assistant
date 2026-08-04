@@ -139,22 +139,23 @@ defmodule Brain.ShoppingList.InvoiceProcessor do
     {string_matched, unmatched_db, unmatched_receipt} =
       string_match(active_items, purchased_items)
 
-    do_find_matches(unmatched_db, unmatched_receipt, string_matched, unmatched_receipt)
-  end
+    if unmatched_db == [] or unmatched_receipt == [] do
+      {string_matched, unmatched_receipt}
+    else
+      case llm_semantic_match(unmatched_db, unmatched_receipt) do
+        {:ok, additional_db_matches, matched_receipt_names} ->
+          final_matched = string_matched ++ additional_db_matches
 
-  defp do_find_matches([], [], string_matched, unmatched_receipt) do
-    {string_matched, unmatched_receipt}
-  end
+          final_unmatched =
+            Enum.reject(unmatched_receipt, fn receipt_item ->
+              Enum.any?(matched_receipt_names, &(normalize(&1) == normalize(receipt_item)))
+            end)
 
-  defp do_find_matches(unmatched_db, unmatched_receipt, string_matched, unmatched_receipt) do
-    case llm_semantic_match(unmatched_db, unmatched_receipt) do
-      {:ok, additional_db_matches, matched_receipt_names} ->
-        final_matched = string_matched ++ additional_db_matches
-        final_unmatched = unmatched_receipt -- matched_receipt_names
-        {final_matched, final_unmatched}
+          {final_matched, final_unmatched}
 
-      :error ->
-        {string_matched, unmatched_receipt}
+        :error ->
+          {string_matched, unmatched_receipt}
+      end
     end
   end
 
@@ -227,12 +228,19 @@ defmodule Brain.ShoppingList.InvoiceProcessor do
              schema
            ) do
         {:ok, %{"matches" => matches}} when is_list(matches) ->
-          matched_receipt_names = Enum.map(matches, & &1["receipt_item"])
+          validated_matches =
+            Enum.filter(matches, fn match ->
+              valid_match_pair?(match, unmatched_db_items, unmatched_receipt_items)
+            end)
 
           matched_db_items =
             Enum.filter(unmatched_db_items, fn db_item ->
-              Enum.any?(matches, fn m -> m["list_item"] == db_item.name end)
+              Enum.any?(validated_matches, fn m ->
+                normalize(m["list_item"]) == normalize(db_item.name)
+              end)
             end)
+
+          matched_receipt_names = Enum.map(validated_matches, & &1["receipt_item"])
 
           {:ok, matched_db_items, matched_receipt_names}
 
@@ -242,6 +250,18 @@ defmodule Brain.ShoppingList.InvoiceProcessor do
     else
       :error
     end
+  end
+
+  defp valid_match_pair?(match, unmatched_db_items, unmatched_receipt_items) do
+    is_map(match) and
+      is_binary(match["list_item"]) and
+      is_binary(match["receipt_item"]) and
+      Enum.any?(unmatched_db_items, fn db_item ->
+        normalize(match["list_item"]) == normalize(db_item.name)
+      end) and
+      Enum.any?(unmatched_receipt_items, fn receipt_item ->
+        normalize(match["receipt_item"]) == normalize(receipt_item)
+      end)
   end
 
   @doc """
