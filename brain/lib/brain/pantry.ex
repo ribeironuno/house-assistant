@@ -15,6 +15,17 @@ defmodule Brain.Pantry do
   end
 
   def add_many(names, added_by) when is_list(names) do
+    case add_many_models(names, added_by) do
+      {:ok, items} -> {:reply, format_added_items(items)}
+      {:error, _} -> {:reply, "[BOT] Não foi possível adicionar os itens à despensa."}
+    end
+  end
+
+  @doc """
+  Inserts multiple pantry items, returning the inserted structs.
+  Rolls back all inserts if any fails. Returns `{:ok, items}` or `{:error, :insert_failed}`.
+  """
+  def add_many_models(names, added_by) when is_list(names) do
     inserted_items =
       Enum.map(names, fn name ->
         changeset = Item.changeset(%Item{}, %{name: name, added_by: added_by})
@@ -22,11 +33,10 @@ defmodule Brain.Pantry do
       end)
 
     if Enum.all?(inserted_items, &match?({:ok, _item}, &1)) do
-      items = Enum.map(inserted_items, fn {:ok, item} -> item end)
-      {:reply, format_added_items(items)}
+      {:ok, Enum.map(inserted_items, fn {:ok, item} -> item end)}
     else
       rollback_inserted_items(inserted_items)
-      {:reply, "[BOT] Não foi possível adicionar os itens à despensa."}
+      {:error, :insert_failed}
     end
   end
 

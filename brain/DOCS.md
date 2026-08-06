@@ -105,7 +105,10 @@ When you send a **photo of a receipt**, the Brain:
    - Substring match (either direction).
    - Word overlap (ignoring Portuguese stop words: de, do, da, dos, das, e, em, para, com).
 3. Deletes the matched items from the list.
-4. Reports what was removed and what was on the receipt but not on the list.
+4. Adds the purchased items to the pantry (skipping items already there), so
+   "what I bought" becomes "what I have at home".
+5. Reports what was removed from the list and what was added to the pantry, plus
+   what was on the receipt but not on the list.
 
 ---
 

@@ -4,10 +4,11 @@ defmodule Brain.ShoppingList.InvoiceProcessor do
 
   Uses LLM Vision (Gemini) to extract purchased product names from receipt images,
   matches them against active items in the shopping list, removes matched items,
-  and formats a response message in Portuguese.
+  adds the purchased items to the pantry, and formats a response message in Portuguese.
   """
 
   require Logger
+  alias Brain.Pantry
   alias Brain.ShoppingList
 
   @schema %{
@@ -40,7 +41,7 @@ defmodule Brain.ShoppingList.InvoiceProcessor do
 
   def process_media(nil, _sender), do: :ignore
 
-  def process_media(media, _sender) when is_map(media) do
+  def process_media(media, sender) when is_map(media) do
     if enabled?() do
       case call_vision_provider(media) do
         {:ok, %{"purchased_items" => items}} when is_list(items) ->
@@ -54,7 +55,7 @@ defmodule Brain.ShoppingList.InvoiceProcessor do
             {:reply,
              "[BOT] 🧾 Li a imagem, mas não consegui identificar nenhum produto da fatura."}
           else
-            match_and_remove(clean_items)
+            match_and_remove(clean_items, sender)
           end
 
         {:error, reason} ->
@@ -90,16 +91,19 @@ defmodule Brain.ShoppingList.InvoiceProcessor do
 
   @doc """
   Matches extracted receipt items against the current shopping list items in Postgres,
-  deletes matching items, and formats the WhatsApp reply.
+  deletes matching items, adds the purchased items to the pantry, and formats the
+  WhatsApp reply.
   """
-  def match_and_remove(purchased_items) do
+  def match_and_remove(purchased_items, sender \\ nil) do
     active_items = ShoppingList.get_active_items()
+    pantry_added = add_to_pantry(purchased_items, sender)
+    pantry_section = format_pantry_added(pantry_added)
 
     if active_items == [] do
       formatted_extracted = Enum.map_join(purchased_items, "\n", &"• #{&1}")
 
       {:reply,
-       "[BOT] 🧾 Fatura lida com sucesso!\n\n🛒 A tua lista de compras estava vazia, por isso nenhum item foi removido.\n\nProdutos na fatura:\n#{formatted_extracted}"}
+       "[BOT] 🧾 Fatura lida com sucesso!\n\n🛒 A tua lista de compras estava vazia, por isso nenhum item foi removido.\n\nProdutos na fatura:\n#{formatted_extracted}#{pantry_section}"}
     else
       {removed_db_items, unmatched_receipt_items} = find_matches(active_items, purchased_items)
 
@@ -107,7 +111,7 @@ defmodule Brain.ShoppingList.InvoiceProcessor do
         formatted_receipt = Enum.take(purchased_items, 5) |> Enum.join(", ")
 
         {:reply,
-         "[BOT] 🧾 Fatura lida (#{formatted_receipt}), mas nenhum dos produtos comprados estava na tua lista de compras."}
+         "[BOT] 🧾 Fatura lida (#{formatted_receipt}), mas nenhum dos produtos comprados estava na tua lista de compras.#{pantry_section}"}
       else
         ShoppingList.delete_items(removed_db_items)
 
@@ -125,9 +129,36 @@ defmodule Brain.ShoppingList.InvoiceProcessor do
             msg <> "\n\n(Outros itens na fatura: #{Enum.join(other_names, ", ")})"
           end
 
-        {:reply, final_msg}
+        {:reply, final_msg <> pantry_section}
       end
     end
+  end
+
+  @doc """
+  Adds purchased items to the pantry, skipping items that are already there
+  (compared case-insensitively). Returns the list of inserted pantry items.
+  """
+  def add_to_pantry(purchased_items, sender) do
+    existing_names =
+      Pantry.get_all()
+      |> Enum.map(&normalize(&1.name))
+
+    new_items =
+      Enum.reject(purchased_items, fn item ->
+        normalize(item) in existing_names
+      end)
+
+    case Pantry.add_many_models(new_items, sender) do
+      {:ok, inserted} -> inserted
+      {:error, _} -> []
+    end
+  end
+
+  defp format_pantry_added([]), do: ""
+
+  defp format_pantry_added(items) do
+    names = Enum.map(items, & &1.name)
+    "\n\n🏠 Adicionados à despensa:\n" <> Enum.map_join(names, "\n", &"• #{&1}")
   end
 
   @doc """

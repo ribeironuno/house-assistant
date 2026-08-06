@@ -13,7 +13,7 @@ and remove bought items from the shopping list automatically.
 |---|---|
 | 🛒 **Shopping list** | Add, remove, list and clear items with plain Portuguese commands |
 | 🔔 **Reminders** | "lembrar de pagar scouts daqui a 3 dias" → posts the reminder at the right time |
-| 🧾 **Receipt photos** | Send a photo of a supermarket receipt → Gemini extracts the products → bought items are removed from the list |
+| 🧾 **Receipt photos** | Send a photo of a supermarket receipt → Gemini extracts the products → bought items are removed from the list and added to the pantry |
 | 🏪 **Pantry** | Track what's at home ("tenho arroz, frango") |
 | 🍽️ **Weekly menu** | "faz-me o menu da semana" → 7 days of dinner ideas + recipes, using your pantry and taste preferences |
 | 🤖 **LLM fallback** | Any unrecognised message is classified by Gemini into one of 14 actions, so natural phrasing works |
@@ -130,7 +130,10 @@ Send a **photo of a supermarket receipt** and the bot will:
 2. Match them against your active shopping list:
    - exact and substring match first (free),
    - then one LLM call for semantically different names (e.g. list has `piripiri`, receipt says `tabasco chipotle`).
-3. Delete the bought items and reply with what was removed.
+3. Delete the bought items from the list.
+4. Add the bought items to your pantry (skipping items already there), so what you
+   bought becomes what you have at home.
+5. Reply with what was removed from the list and added to the pantry.
 
 No extra command is needed — just send the photo to the group.
 

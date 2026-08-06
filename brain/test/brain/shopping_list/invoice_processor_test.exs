@@ -1,7 +1,10 @@
 defmodule Brain.ShoppingList.InvoiceProcessorTest do
   use BrainWeb.ConnCase, async: false
+  import Ecto.Query
 
   alias Brain.LLM.Providers.TestStub
+  alias Brain.Pantry
+  alias Brain.Pantry.Item, as: PantryItem
   alias Brain.Repo
   alias Brain.ShoppingList
   alias Brain.ShoppingList.InvoiceProcessor
@@ -48,6 +51,44 @@ defmodule Brain.ShoppingList.InvoiceProcessorTest do
 
     assert reply =~ "nenhum dos produtos comprados estava na tua lista"
     assert length(Repo.all(Item)) == 1
+  end
+
+  test "match_and_remove adds purchased items to the pantry" do
+    ShoppingList.add("leite", "user_1")
+
+    purchased_items = ["leite", "pão de forma"]
+
+    assert {:reply, reply} = InvoiceProcessor.match_and_remove(purchased_items, "user_1")
+
+    assert reply =~ "🏠 Adicionados à despensa:"
+    assert reply =~ "• leite"
+    assert reply =~ "• pão de forma"
+
+    pantry_items = Repo.all(from(p in PantryItem, order_by: [asc: p.inserted_at]))
+    assert Enum.map(pantry_items, & &1.name) == ["leite", "pão de forma"]
+    assert Enum.all?(pantry_items, &(&1.added_by == "user_1"))
+  end
+
+  test "match_and_remove adds items to pantry even when shopping list is empty" do
+    purchased_items = ["arroz"]
+
+    assert {:reply, reply} = InvoiceProcessor.match_and_remove(purchased_items, "user_2")
+
+    assert reply =~ "lista de compras estava vazia"
+    assert reply =~ "🏠 Adicionados à despensa:"
+
+    assert Repo.all(PantryItem) |> Enum.map(& &1.name) == ["arroz"]
+    assert hd(Repo.all(PantryItem)).added_by == "user_2"
+  end
+
+  test "match_and_remove does not duplicate items already in the pantry" do
+    Pantry.add_many(["leite"], "user_1")
+    ShoppingList.add("leite", "user_1")
+
+    assert {:reply, reply} = InvoiceProcessor.match_and_remove(["leite"], "user_1")
+
+    refute reply =~ "🏠 Adicionados à despensa:"
+    assert length(Repo.all(PantryItem)) == 1
   end
 
   test "find_matches correctly matches normalized strings" do
