@@ -9,6 +9,7 @@ defmodule Brain.ShoppingList.InvoiceProcessor do
 
   require Logger
   alias Brain.Pantry
+  alias Brain.Repo
   alias Brain.ShoppingList
 
   @schema %{
@@ -92,11 +93,41 @@ defmodule Brain.ShoppingList.InvoiceProcessor do
   @doc """
   Matches extracted receipt items against the current shopping list items in Postgres,
   deletes matching items, adds the purchased items to the pantry, and formats the
-  WhatsApp reply.
+  WhatsApp reply.  The pantry insert and shopping-list delete are wrapped in a
+  single DB transaction so the two writes are always consistent.
   """
   def match_and_remove(purchased_items, sender \\ nil) do
     active_items = ShoppingList.get_active_items()
-    pantry_added = add_to_pantry(purchased_items, sender)
+    {removed_db_items, unmatched_receipt_items} = find_matches(active_items, purchased_items)
+
+    Repo.transaction(fn ->
+      pantry_added = add_to_pantry(purchased_items, sender)
+
+      if removed_db_items != [] do
+        ShoppingList.delete_items(removed_db_items)
+      end
+
+      build_reply(
+        active_items,
+        purchased_items,
+        removed_db_items,
+        unmatched_receipt_items,
+        pantry_added
+      )
+    end)
+    |> case do
+      {:ok, reply} -> reply
+      {:error, _} -> {:reply, "[BOT] 🧾 Ocorreu um erro ao processar a fatura."}
+    end
+  end
+
+  defp build_reply(
+         active_items,
+         purchased_items,
+         removed_db_items,
+         unmatched_receipt_items,
+         pantry_added
+       ) do
     pantry_section = format_pantry_added(pantry_added)
 
     if active_items == [] do
@@ -105,16 +136,12 @@ defmodule Brain.ShoppingList.InvoiceProcessor do
       {:reply,
        "[BOT] 🧾 Fatura lida com sucesso!\n\n🛒 A tua lista de compras estava vazia, por isso nenhum item foi removido.\n\nProdutos na fatura:\n#{formatted_extracted}#{pantry_section}"}
     else
-      {removed_db_items, unmatched_receipt_items} = find_matches(active_items, purchased_items)
-
       if removed_db_items == [] do
         formatted_receipt = Enum.take(purchased_items, 5) |> Enum.join(", ")
 
         {:reply,
          "[BOT] 🧾 Fatura lida (#{formatted_receipt}), mas nenhum dos produtos comprados estava na tua lista de compras.#{pantry_section}"}
       else
-        ShoppingList.delete_items(removed_db_items)
-
         removed_names = Enum.map(removed_db_items, & &1.name)
         formatted_removed = Enum.map_join(removed_names, "\n", &"• #{&1}")
 
