@@ -29,20 +29,26 @@ defmodule Brain.ShoppingList do
   end
 
   def remove(search_term) do
-    query =
-      from(i in Item,
-        where: i.done == false and ilike(i.name, ^"%#{search_term}%"),
-        order_by: [desc: i.inserted_at],
-        limit: 1
-      )
+    cleaned = Brain.Text.strip_leading_articles(search_term)
 
-    case Repo.one(query) do
-      nil ->
-        {:reply, "[BOT] O item '#{search_term}' não foi encontrado na lista de compras."}
+    if cleaned == "" do
+      {:reply, "[BOT] Por favor especifica o item a remover, ex: 'remove leite'."}
+    else
+      query =
+        from(i in Item,
+          where: i.done == false and ilike(i.name, ^"%#{cleaned}%"),
+          order_by: [desc: i.inserted_at],
+          limit: 1
+        )
 
-      item ->
-        Repo.delete!(item)
-        {:reply, "[BOT] 🗑️ Removido: #{item.name}"}
+      case Repo.one(query) do
+        nil ->
+          {:reply, "[BOT] O item '#{search_term}' não foi encontrado na lista de compras."}
+
+        item ->
+          Repo.delete!(item)
+          {:reply, "[BOT] 🗑️ Removido: #{item.name}"}
+      end
     end
   end
 

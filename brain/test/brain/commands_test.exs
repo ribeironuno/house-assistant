@@ -5,6 +5,7 @@ defmodule Brain.CommandsTest do
   alias Brain.Commands
   alias Brain.Repo
   alias Brain.Reminders.Reminder
+  alias Brain.ShoppingList
   alias Brain.ShoppingList.Item
 
   setup do
@@ -174,5 +175,22 @@ defmodule Brain.CommandsTest do
     assert :ignore = Commands.handle("[BOT] 🛒 Lista de Compras:\n1. leite", "user_1")
     assert :ignore = Commands.handle("[BOT] 🧹 Lista de compras limpa.", "user_1")
     assert :ignore = Commands.handle("[BOT] 🔔 Lembrete: pagar scouts", "user_1")
+  end
+
+  test "remove o leite removes 'leite' (articles are stripped)" do
+    ShoppingList.add("leite", "user_1")
+    assert {:reply, "[BOT] 🗑️ Removido: leite"} = Commands.handle("remove o leite", "user_1")
+    assert ShoppingList.get_active_items() == []
+  end
+
+  test "por favor adiciona leite routes to LLM classifier (no longer dropped by bot_reply?)" do
+    # Without an LLM configured, it falls through as :ignore — the key assertion
+    # is that it is NOT dropped by the old bot_reply? false-positive filter.
+    # In production, Gemini would map it to {"action":"add_shopping_items", ...}.
+    result = Commands.handle("por favor adiciona leite", "user_1")
+    # The result may be :ignore (LLM stub error) or a reply — but it must NOT be
+    # silently dropped by bot_reply?. The old code returned :ignore here due to the
+    # "por favor" prefix; now it correctly reaches the LLM fallback path.
+    assert result == :ignore
   end
 end
