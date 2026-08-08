@@ -34,6 +34,7 @@ process.on("unhandledRejection", (reason) => {
 
 process.on("uncaughtException", (err) => {
   console.error("[Bridge] Uncaught exception:", err);
+  process.exit(1);
 });
 
 let isConnected = false;

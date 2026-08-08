@@ -21,12 +21,13 @@ export async function handleIncomingMessage(client, message) {
 
   const groupId = message.fromMe ? message.to : message.from;
 
+  // Defensive: if TARGET_GROUP_ID is somehow empty, accept all messages.
   if (TARGET_GROUP_ID && groupId !== TARGET_GROUP_ID) {
     return;
   }
 
   let mediaData = null;
-  if (message.hasMedia) {
+  if (message.hasMedia && (message.type === "image" || message.type === "document")) {
     console.log(
       "[Bridge] Attempting media download for message:",
       message.id?.id,

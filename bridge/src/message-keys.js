@@ -16,8 +16,8 @@
  * @returns {string[]}
  */
 export function buildMsgKeys(msg) {
-  const remote = msg.id?.remote;
-  const id = msg.id?.id;
+  const remote = msg?.id?.remote;
+  const id = msg?.id?.id;
   if (!remote || !id) return [];
   const dir = msg.id?.fromMe ? "out" : "in";
   const participant = msg.id?.participant || msg.author;

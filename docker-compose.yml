@@ -22,7 +22,7 @@ services:
       - ELIXIR_WEBHOOK_URL=${ELIXIR_WEBHOOK_URL:-http://brain:4000/webhook/whatsapp}
       - TARGET_GROUP_ID=${TARGET_GROUP_ID:-}
     volumes:
-      - baileys_auth:/app/auth_info_baileys
+      - baileys_auth:/app/.wwebjs_auth
     restart: unless-stopped
 
   brain:
