@@ -167,6 +167,41 @@ defmodule Brain.CommandsTest do
     assert Repo.all(Reminder) == []
   end
 
+  test "lembrar de command creates reminder for à sexta" do
+    assert {:reply, reply} =
+             Commands.handle("lembrar de ligar à avó à sexta", "user_1", "group_1")
+
+    assert reply =~ "[BOT] 🔔 Lembrete guardado!"
+    assert reply =~ "Título: ligar à avó"
+
+    [reminder] = Repo.all(Reminder)
+    assert reminder.text == "ligar à avó"
+    assert reminder.remind_at |> DateTime.shift_zone!("Europe/Lisbon") |> Date.day_of_week() == 5
+  end
+
+  test "lembrar de command creates reminder for às 18h" do
+    assert {:reply, reply} =
+             Commands.handle("lembrar de pagar a luz às 18h", "user_1", "group_1")
+
+    assert reply =~ "[BOT] 🔔 Lembrete guardado!"
+    assert reply =~ "Título: pagar a luz"
+
+    [reminder] = Repo.all(Reminder)
+    assert reminder.remind_at |> DateTime.shift_zone!("Europe/Lisbon") |> Map.get(:hour) == 18
+  end
+
+  test "lembrar de command creates reminder for amanhã às 9h" do
+    assert {:reply, reply} =
+             Commands.handle("lembrar de ligar à avó amanhã às 9h", "user_1", "group_1")
+
+    assert reply =~ "[BOT] 🔔 Lembrete guardado!"
+    assert reply =~ "Título: ligar à avó"
+
+    [reminder] = Repo.all(Reminder)
+    remind_lisbon = reminder.remind_at |> DateTime.shift_zone!("Europe/Lisbon")
+    assert remind_lisbon.hour == 9
+  end
+
   test "unrecognized messages and bot response prefixes are ignored" do
     assert :ignore = Commands.handle("olá tudo bem?", "user_1")
     assert :ignore = Commands.handle("qual é a receita de hoje?", "user_1")

@@ -43,16 +43,64 @@ defmodule Brain.Reminders do
 
   defp parse("", _now), do: {:error, :missing_text}
 
+  @weekday_map %{
+    "segunda" => 1,
+    "terça" => 2,
+    "terca" => 2,
+    "quarta" => 3,
+    "quinta" => 4,
+    "sexta" => 5,
+    "sábado" => 6,
+    "sabado" => 6,
+    "domingo" => 0
+  }
+
+  @default_weekday_hour 10
+
   defp parse(body, now) do
     cond do
       match =
-          Regex.run(~r/\bdaqui\s+a\s+(\d+)\s+(minutos?|mins?|horas?|dias?|semanas?)\b/iu, body) ->
+          Regex.run(
+            ~r/\bdaqui\s+a\s+(\d+)\s+(minutos?|mins?|horas?|dias?|semanas?)\b/iu,
+            body
+          ) ->
         [phrase, amount_text, unit] = match
         reminder_text = remove_time_phrase(body, phrase)
 
         remind_at =
           DateTime.add(now, duration_in_seconds(String.to_integer(amount_text), unit), :second)
 
+        validate_text(reminder_text, remind_at)
+
+      # "amanhã às 9h" / "amanhã às 18:00" — tomorrow at a specific time
+      match = Regex.run(~r/\bamanh[ãa]\s+[àa]s\s+(\d{1,2})(?:h|:00)?\b/iu, body) ->
+        [phrase, hour_str] = match
+        reminder_text = remove_time_phrase(body, phrase)
+        hour = String.to_integer(hour_str)
+        remind_at = next_clock_time(now, hour, days_ahead: 1)
+        validate_text(reminder_text, remind_at)
+
+      # "à sexta" / "à segunda" / "à terça às 18h" etc. — next weekday (optionally with time)
+      match =
+          Regex.run(
+            ~r/\b[àa]\s+(segunda|terça|terca|quarta|quinta|sexta|sábado|sabado|domingo)(?:\s+[àa]s\s+(\d{1,2})(?:h|:00)?)?\b/iu,
+            body
+          ) ->
+        weekday_name = Enum.at(match, 1)
+        time_str = Enum.at(match, 2)
+        phrase = Enum.at(match, 0)
+        reminder_text = remove_time_phrase(body, phrase)
+        weekday_num = @weekday_map[String.downcase(weekday_name)]
+        hour = if time_str, do: String.to_integer(time_str), else: @default_weekday_hour
+        remind_at = next_weekday(now, weekday_num, hour)
+        validate_text(reminder_text, remind_at)
+
+      # "às 18h" / "às 18:00" / "às 9h" — today (or tomorrow if already past)
+      match = Regex.run(~r/\b[àa]s\s+(\d{1,2})(?:h|:00)\b/iu, body) ->
+        [phrase, hour_str] = match
+        reminder_text = remove_time_phrase(body, phrase)
+        hour = String.to_integer(hour_str)
+        remind_at = next_clock_time(now, hour, days_ahead: 0)
         validate_text(reminder_text, remind_at)
 
       Regex.match?(~r/\blogo\b/iu, body) ->
@@ -77,6 +125,40 @@ defmodule Brain.Reminders do
       unit when unit in ["dia", "dias"] -> amount * 24 * 60 * 60
       unit when unit in ["semana", "semanas"] -> amount * 7 * 24 * 60 * 60
     end
+  end
+
+  @doc false
+  defp next_weekday(now, target_day, hour) do
+    now_lisbon = DateTime.shift_zone!(now, @lisbon_tz)
+    current_dow = Date.day_of_week(now_lisbon)
+
+    days_ahead =
+      if target_day > current_dow,
+        do: target_day - current_dow,
+        else: 7 - (current_dow - target_day)
+
+    next_date = Date.add(DateTime.to_date(now_lisbon), days_ahead)
+
+    DateTime.new!(next_date, Time.new!(hour, 0, 0), @lisbon_tz)
+    |> DateTime.shift_zone!("Etc/UTC")
+  end
+
+  @doc false
+  defp next_clock_time(now, hour, opts) do
+    days_ahead = opts[:days_ahead] || 0
+    now_lisbon = DateTime.shift_zone!(now, @lisbon_tz)
+    now_hour = now_lisbon.hour
+    target_date = DateTime.to_date(now_lisbon) |> Date.add(days_ahead)
+
+    target_date =
+      if days_ahead == 0 and now_hour >= hour do
+        Date.add(target_date, 1)
+      else
+        target_date
+      end
+
+    DateTime.new!(target_date, Time.new!(hour, 0, 0), @lisbon_tz)
+    |> DateTime.shift_zone!("Etc/UTC")
   end
 
   defp remove_time_phrase(body, phrase) when is_binary(phrase) do
