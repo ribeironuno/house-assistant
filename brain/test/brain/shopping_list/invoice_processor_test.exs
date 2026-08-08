@@ -18,7 +18,7 @@ defmodule Brain.ShoppingList.InvoiceProcessorTest do
   test "match_and_remove matches receipt items against DB and removes them" do
     ShoppingList.add("leite, ovos, manteiga", "user_1")
 
-    purchased_items = ["leite meio gordo mimosa", "ovos de galinha", "pão de forma"]
+    purchased_items = ["leite", "ovos", "pão de forma"]
 
     assert {:reply, reply} = InvoiceProcessor.match_and_remove(purchased_items)
 
@@ -30,6 +30,56 @@ defmodule Brain.ShoppingList.InvoiceProcessorTest do
     remaining = Repo.all(Item)
     assert length(remaining) == 1
     assert hd(remaining).name == "manteiga"
+  end
+
+  test "match_and_remove does NOT delete items for different products (no false positives)" do
+    ShoppingList.add("leite, arroz, salada", "user_1")
+
+    purchased_items = ["leite de coco", "arroz de marisco", "sal"]
+
+    assert {:reply, reply} = InvoiceProcessor.match_and_remove(purchased_items)
+
+    assert reply =~ "nenhum dos produtos comprados estava na tua lista de compras"
+
+    remaining = Repo.all(Item)
+    assert length(remaining) == 3
+  end
+
+  test "match_and_remove enforces 1:1 — one receipt item deletes at most one list item" do
+    ShoppingList.add("leite, leite magro, manteiga", "user_1")
+
+    purchased_items = ["leite"]
+
+    assert {:reply, reply} = InvoiceProcessor.match_and_remove(purchased_items)
+
+    remaining = Repo.all(Item)
+    assert length(remaining) == 2
+    refute Enum.any?(remaining, &(&1.name == "leite"))
+    assert Enum.any?(remaining, &(&1.name == "leite magro"))
+  end
+
+  test "match_and_remove uses LLM semantic matching for descriptor-heavy receipt names" do
+    ShoppingList.add("leite, piripiri", "user_1")
+
+    TestStub.set_response(
+      {:ok,
+       %{
+         "matches" => [
+           %{"list_item" => "leite", "receipt_item" => "leite meio gordo mimosa"},
+           %{"list_item" => "piripiri", "receipt_item" => "tabasco"}
+         ]
+       }}
+    )
+
+    purchased_items = ["leite meio gordo mimosa", "tabasco"]
+
+    assert {:reply, reply} = InvoiceProcessor.match_and_remove(purchased_items)
+
+    assert reply =~ "• leite"
+    assert reply =~ "• piripiri"
+
+    remaining = Repo.all(Item)
+    assert remaining == []
   end
 
   test "match_and_remove when DB list is empty" do
@@ -91,7 +141,7 @@ defmodule Brain.ShoppingList.InvoiceProcessorTest do
     assert length(Repo.all(PantryItem)) == 1
   end
 
-  test "find_matches correctly matches normalized strings" do
+  test "find_matches matches via LLM semantic matching when names carry descriptors" do
     items = [
       %Item{id: 1, name: "leite"},
       %Item{id: 2, name: "ovos frescos"},
@@ -99,6 +149,16 @@ defmodule Brain.ShoppingList.InvoiceProcessorTest do
     ]
 
     receipt = ["LEITE MEIO GORDO UHT 1L", "ovos", "chocolates"]
+
+    TestStub.set_response(
+      {:ok,
+       %{
+         "matches" => [
+           %{"list_item" => "leite", "receipt_item" => "LEITE MEIO GORDO UHT 1L"},
+           %{"list_item" => "ovos frescos", "receipt_item" => "ovos"}
+         ]
+       }}
+    )
 
     {matched, unmatched} = InvoiceProcessor.find_matches(items, receipt)
 

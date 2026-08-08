@@ -164,6 +164,7 @@ defmodule Brain.ShoppingList.InvoiceProcessor do
   @doc """
   Finds matching DB shopping list items given a list of purchased items from a receipt.
   Uses fast string matching first, then LLM semantic matching for remaining unmatched pairs.
+  Each receipt item matches at most one DB item (1:1).
   Returns `{matched_db_items, unmatched_receipt_items}`.
   """
   def find_matches(active_items, purchased_items) do
@@ -175,7 +176,16 @@ defmodule Brain.ShoppingList.InvoiceProcessor do
     else
       case llm_semantic_match(unmatched_db, unmatched_receipt) do
         {:ok, additional_db_matches, matched_receipt_names} ->
-          final_matched = string_matched ++ additional_db_matches
+          # Enforce 1:1: LLM matches must not overlap with string matches
+          already_matched =
+            MapSet.new(string_matched, &normalize(&1.name))
+
+          additional_filtered =
+            Enum.reject(additional_db_matches, fn db_item ->
+              MapSet.member?(already_matched, normalize(db_item.name))
+            end)
+
+          final_matched = string_matched ++ additional_filtered
 
           final_unmatched =
             Enum.reject(unmatched_receipt, fn receipt_item ->
@@ -190,28 +200,31 @@ defmodule Brain.ShoppingList.InvoiceProcessor do
     end
   end
 
+  @min_match_length 4
+
   defp string_match(active_items, purchased_items) do
-    purchased_normalized = Enum.map(purchased_items, &normalize/1)
-
-    {matched_db_items, unmatched_db_items} =
-      Enum.split_with(active_items, fn db_item ->
-        item_norm = normalize(db_item.name)
-
-        Enum.any?(purchased_normalized, fn receipt_item_norm ->
-          items_match?(item_norm, receipt_item_norm)
-        end)
-      end)
-
-    unmatched_receipt =
-      Enum.reject(purchased_items, fn receipt_item ->
+    # Greedy 1:1 matching: each receipt item claims at most one DB item.
+    {matched_db_items, unmatched_receipt} =
+      Enum.reduce(purchased_items, {[], []}, fn receipt_item, {matched_db, unmatched} ->
         receipt_norm = normalize(receipt_item)
 
-        Enum.any?(matched_db_items, fn db_item ->
-          items_match?(normalize(db_item.name), receipt_norm)
-        end)
+        case Enum.find(active_items, fn db_item ->
+               db_item not in matched_db and
+                 items_match?(normalize(db_item.name), receipt_norm)
+             end) do
+          nil ->
+            {matched_db, [receipt_item | unmatched]}
+
+          db_item ->
+            {[db_item | matched_db], unmatched}
+        end
       end)
 
-    {matched_db_items, unmatched_db_items, unmatched_receipt}
+    matched_db_items = Enum.reverse(matched_db_items)
+    unmatched_db = active_items -- matched_db_items
+    unmatched_receipt = Enum.reverse(unmatched_receipt)
+
+    {matched_db_items, unmatched_db, unmatched_receipt}
   end
 
   @doc """
@@ -298,6 +311,9 @@ defmodule Brain.ShoppingList.InvoiceProcessor do
   @doc """
   Determines if an item on the shopping list matches an item on the receipt.
   Checks exact equality, substring match, and word overlap.
+  Conservative by design: ambiguous matches are deferred to LLM semantic matching
+  instead of auto-deleting unrelated items (e.g. "sal" vs "salada",
+  "leite" vs "leite de coco").
   """
   def items_match?(item_norm, receipt_norm)
       when is_binary(item_norm) and is_binary(receipt_norm) do
@@ -305,7 +321,7 @@ defmodule Brain.ShoppingList.InvoiceProcessor do
       item_norm == receipt_norm ->
         true
 
-      String.contains?(receipt_norm, item_norm) or String.contains?(item_norm, receipt_norm) ->
+      substring_match?(item_norm, receipt_norm) ->
         true
 
       word_overlap?(item_norm, receipt_norm) ->
@@ -318,20 +334,35 @@ defmodule Brain.ShoppingList.InvoiceProcessor do
 
   def items_match?(_, _), do: false
 
-  defp word_overlap?(a, b) do
-    words_a =
-      String.split(a)
-      |> Enum.reject(&(&1 in ["de", "do", "da", "dos", "das", "e", "em", "para", "com"]))
+  @doc false
+  defp substring_match?(a, b) do
+    shorter = if String.length(a) <= String.length(b), do: a, else: b
+    longer = if shorter == a, do: b, else: a
 
-    words_b =
-      String.split(b)
-      |> Enum.reject(&(&1 in ["de", "do", "da", "dos", "das", "e", "em", "para", "com"]))
+    String.length(shorter) >= @min_match_length and
+      String.contains?(longer, shorter) and
+      String.length(shorter) / max(String.length(longer), 1) >= 0.5
+  end
+
+  defp word_overlap?(a, b) do
+    words_a = significant_words(a)
+    words_b = significant_words(b)
 
     if words_a == [] or words_b == [] do
       false
     else
-      Enum.any?(words_a, fn w -> w in words_b end)
+      Enum.any?(words_a, fn w ->
+        String.length(w) >= @min_match_length and
+          w in words_b and
+          String.length(w) / max(String.length(a), String.length(b)) >= 0.5
+      end)
     end
+  end
+
+  @stop_words ~w(de do da dos das e em para com sem por ou)
+  defp significant_words(str) do
+    String.split(str)
+    |> Enum.reject(&(&1 in @stop_words))
   end
 
   defp normalize(str) do
