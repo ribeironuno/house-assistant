@@ -20,6 +20,29 @@ and remove bought items from the shopping list automatically.
 
 ---
 
+## Real-life use cases
+
+**🛒 The shopping list that fixes itself**
+
+Ana notices at work that the milk is about to run out. She texts `adiciona leite, pão e
+manteiga`. Later, at the supermarket, her husband sends `lista`, buys everything, and
+snaps a photo of the receipt. The bot matches the items, removes them from the list, and
+adds them to the pantry — next time someone opens the list, it's already clean.
+
+**🔔 Bills and commitments you never forget**
+
+`lembrar de pagar a luz daqui a 3 dias` posts a reminder to the group on the right day.
+`lembra-me de ligar à avó amanhã` makes sure a call actually happens.
+
+**🍽️ Dinners planned from what's in the cupboard**
+
+After the shop, the pantry knows what's at home (`tenho frango, arroz, tomate`). Send
+`faz-me o menu da semana` and get 7 days of dinner ideas with recipes that prefer those
+ingredients. When a dish misses the mark, `não gostei da feijoada` teaches it your taste
+for next week.
+
+---
+
 ## Architecture
 
 ```
@@ -195,16 +218,6 @@ node index.js             # scan the QR code on first run
 
 ---
 
-## Running with Docker Compose (full stack)
-
-Builds and runs all three services in containers:
-
-```bash
-docker compose up --build
-```
-
----
-
 ## Environment variables
 
 ### Bridge
@@ -270,7 +283,7 @@ cd brain
 mix test
 ```
 
-88 tests covering command parsing, DB persistence, webhook routing, invoice matching,
+Tests cover command parsing, DB persistence, webhook routing, invoice matching,
 LLM classification and menu generation. LLM calls are stubbed in tests — they never hit
 the network or spend tokens.
 
@@ -283,19 +296,8 @@ house_assistant/
 ├── bridge/        # Node.js whatsapp-web.js bridge (src/ split into modules)
 ├── brain/         # Elixir / Phoenix application
 │   ├── lib/       # commands, shopping list, pantry, reminders, menu, LLM providers
-│   ├── test/      # 88 tests
+│   ├── test/      # ExUnit test suite
 │   └── DOCS.md    # detailed architecture & feature documentation
 ├── docker-compose.yml
 └── .env.example
 ```
-
----
-
-## Roadmap
-
-- [x] Phase 1 — WhatsApp bridge + Phoenix webhook plumbing
-- [x] Phase 2 — Persistent shopping list with Postgres, Portuguese commands
-- [x] Phase 3 — Dynamic reminders ("lembrar de … daqui a 3 dias")
-- [x] Phase 4 — LLM intent parsing (Gemini free tier) + pantry + receipt photo processing
-- [x] Phase 5 — Weekly menu suggestions with recipes and preference learning
-- [ ] Phase 6 — Reminder parser improvements for exact dates/times
