@@ -4,6 +4,7 @@
 # Node / Baileys
 node_modules/
 npm-debug.log*
+bridge/yarn.lock
 bridge/auth_info_baileys/
 bridge/.wwebjs_auth/
 bridge/.wwebjs_cache/

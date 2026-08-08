@@ -181,6 +181,18 @@ npm install
 node index.js             # scan the QR code on first run
 ```
 
+> **About the `whatsapp-web.js` patch:** a July 2026 WhatsApp Web update renamed an
+> internal serialized-ID getter from `._serialized` to `.$1`, which breaks
+> `downloadMedia()`, `getChats()`, `getChatById()` and other ID-keyed calls in the
+> pinned version (1.34.7) — the visible symptom is a `not_found` media download and
+> an opaque `r: r` Puppeteer error. `npm install` (including inside the Docker
+> build) applies a local patch via `patch-package` (`bridge/patches/`), so this
+> needs no manual step. Remove the patch once upstream ships a release containing
+> fix `wwebjs/whatsapp-web.js#201832` or `#201840` — bump the version, run
+> `npm install`, and if `patch-package` fails to apply cleanly the underlying code
+> likely changed enough that the patch is either unnecessary or must be regenerated
+> with `npx patch-package whatsapp-web.js`.
+
 ---
 
 ## Running with Docker Compose (full stack)

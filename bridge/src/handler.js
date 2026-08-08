@@ -1,6 +1,5 @@
-import { TARGET_GROUP_ID, ELIXIR_WEBHOOK_URL } from "./config.js";
+import { ELIXIR_WEBHOOK_URL, TARGET_GROUP_ID } from "./config.js";
 import { isBridgeSelfMessage } from "./loop-prevention.js";
-import { downloadMediaFixed } from "./media-download.js";
 
 /**
  * Handles every message_create event from WhatsApp.
@@ -28,26 +27,23 @@ export async function handleIncomingMessage(client, message) {
 
   let mediaData = null;
   if (message.hasMedia) {
+    console.log(
+      "[Bridge] Attempting media download for message:",
+      message.id?.id,
+    );
+
     try {
-      console.log(
-        "[Bridge] Attempting media download for message:",
-        message.id?.id,
-      );
-      const downloaded = await downloadMediaFixed(client, message);
-      if (downloaded && downloaded.data) {
+      const messageMedia = await message.downloadMedia();
+
+      if (messageMedia && messageMedia.data) {
         mediaData = {
-          mimetype: downloaded.mimetype,
-          data: downloaded.data,
-          filename: downloaded.filename || null,
+          mimetype: messageMedia.mimetype,
+          data: messageMedia.data, // already base64-encoded by whatsapp-web.js
+          filename: messageMedia.filename || null,
         };
         console.log(
-          `[Bridge] Downloaded media (${downloaded.mimetype}, ${downloaded.data.length} chars base64)`,
+          `[Bridge] Downloaded media (${mediaData.mimetype}, ${mediaData.data.length} chars base64)`,
         );
-      } else if (downloaded && downloaded.error) {
-        console.error(
-          `[Bridge] Media download failed: ${downloaded.error}${downloaded.stage ? " (stage: " + downloaded.stage + ")" : ""}`,
-        );
-        if (downloaded.message) console.error(`  ${downloaded.message}`);
       } else {
         console.log(
           "[Bridge] Media download returned no data for message:",
@@ -55,11 +51,7 @@ export async function handleIncomingMessage(client, message) {
         );
       }
     } catch (err) {
-      console.error(
-        "[Bridge] Failed to download media:",
-        err.message,
-        err.stack,
-      );
+      console.error("[Bridge] Failed to download media:", err.message);
     }
   }
 

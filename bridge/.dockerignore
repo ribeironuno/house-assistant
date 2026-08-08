@@ -1,4 +1,5 @@
 node_modules
-npm-debug.log
+npm-debug.log*
 auth_info_baileys
 .DS_Store
+.git

@@ -24,6 +24,17 @@ import { createServer } from "./src/server.js";
 
 const { Client, LocalAuth } = pkg;
 
+process.on("unhandledRejection", (reason) => {
+  console.error(
+    "[Bridge] Unhandled promise rejection (keeping process alive):",
+    reason,
+  );
+});
+
+process.on("uncaughtException", (err) => {
+  console.error("[Bridge] Uncaught exception:", err);
+});
+
 let isConnected = false;
 
 const client = new Client({

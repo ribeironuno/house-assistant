@@ -10,6 +10,7 @@ RUN apt-get update && apt-get install -y \
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 
 COPY package*.json ./
+COPY patches ./patches
 RUN npm install
 
 COPY . .

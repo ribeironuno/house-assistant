@@ -1,0 +1,577 @@
+diff --git a/node_modules/whatsapp-web.js/src/Client.js b/node_modules/whatsapp-web.js/src/Client.js
+index 800109e..10cdadb 100644
+--- a/node_modules/whatsapp-web.js/src/Client.js
++++ b/node_modules/whatsapp-web.js/src/Client.js
+@@ -1177,7 +1177,8 @@ class Client extends EventEmitter {
+                             const parentMsgKey = reaction.reactionParentKey;
+                             const timestamp = reaction.reactionTimestamp / 1000;
+                             const sender = reaction.author ?? reaction.from;
+-                            const senderUserJid = sender._serialized;
++                            const senderUserJid =
++                                sender?._serialized || sender?.$1;
+ 
+                             return {
+                                 ...reaction,
+@@ -1205,14 +1206,17 @@ class Client extends EventEmitter {
+                             const parentMsgKey = vote.pollUpdateParentKey;
+                             const timestamp = vote.t / 1000;
+                             const sender = vote.author ?? vote.from;
+-                            const senderUserJid = sender._serialized;
++                            const senderUserJid =
++                                sender?._serialized || sender?.$1;
+ 
+                             let parentMessage = Msg.get(
+-                                parentMsgKey._serialized,
++                                parentMsgKey._serialized ||
++                                    parentMsgKey.$1,
+                             );
+                             if (!parentMessage) {
+                                 const fetched = await Msg.getMessagesById([
+-                                    parentMsgKey._serialized,
++                                    parentMsgKey._serialized ||
++                                        parentMsgKey.$1,
+                                 ]);
+                                 parentMessage = fetched?.messages?.[0] || null;
+                             }
+@@ -1838,7 +1842,7 @@ class Client extends EventEmitter {
+                 .joinGroupViaInvite(inviteCode);
+         }, inviteCode);
+ 
+-        return res.gid._serialized;
++        return res.gid._serialized || res.gid.$1;
+     }
+ 
+     /**
+@@ -2382,7 +2386,8 @@ class Client extends EventEmitter {
+                         (participant.wid = window
+                             .require('WAWebApiContact')
+                             .getPhoneNumber(participant.wid));
+-                    const participantId = participant.wid._serialized;
++                    const participantId =
++                        participant.wid._serialized || participant.wid.$1;
+                     const statusCode = participant.error || 200;
+ 
+                     if (autoSendInviteV4 && statusCode === 403) {
+@@ -2398,7 +2403,8 @@ class Client extends EventEmitter {
+                                     (await window
+                                         .require('WAWebCollections')
+                                         .Chat.find(participant.wid)),
+-                                createGroupResult.wid._serialized,
++                                createGroupResult.wid._serialized ||
++                                    createGroupResult.wid.$1,
+                                 createGroupResult.subject,
+                                 participant.invite_code,
+                                 participant.invite_code_exp,
+@@ -2872,7 +2878,7 @@ class Client extends EventEmitter {
+             let chatIds = window
+                 .require('WAWebCollections')
+                 .Blocklist.getModelsArray()
+-                .map((a) => a.id._serialized);
++                .map((a) => a.id._serialized || a.id.$1);
+             return Promise.all(
+                 chatIds.map((id) => window.WWebJS.getContact(id)),
+             );
+@@ -2893,7 +2899,7 @@ class Client extends EventEmitter {
+             (chatid, media) => {
+                 return window.WWebJS.setPicture(chatid, media);
+             },
+-            this.info.wid._serialized,
++            this.info.wid._serialized || this.info.wid.$1,
+             media,
+         );
+ 
+@@ -2907,7 +2913,7 @@ class Client extends EventEmitter {
+     async deleteProfilePicture() {
+         const success = await this.pupPage.evaluate((chatid) => {
+             return window.WWebJS.deletePicture(chatid);
+-        }, this.info.wid._serialized);
++        }, this.info.wid._serialized || this.info.wid.$1);
+ 
+         return success;
+     }
+@@ -2933,7 +2939,9 @@ class Client extends EventEmitter {
+                 );
+                 const chats = window
+                     .require('WAWebCollections')
+-                    .Chat.filter((e) => chatIds.includes(e.id._serialized));
++                    .Chat.filter((e) =>
++                        chatIds.includes(e.id._serialized || e.id.$1),
++                    );
+ 
+                 let actions = labels.map((label) => ({
+                     id: label.id,
+@@ -3314,8 +3322,8 @@ class Client extends EventEmitter {
+                         await window.WWebJS.enforceLidAndPnRetrieval(userId);
+ 
+                     return {
+-                        lid: lid?._serialized,
+-                        pn: phone?._serialized,
++                        lid: lid?._serialized || lid?.$1,
++                        pn: phone?._serialized || phone?.$1,
+                     };
+                 }),
+             );
+@@ -3386,9 +3394,13 @@ class Client extends EventEmitter {
+ 
+             if (!serialized) return null;
+ 
+-            serialized.chatId = window
+-                .require('WAWebJidToWid')
+-                .userJidToUserWid(serialized.chatJid)._serialized;
++            serialized.chatId =
++                window
++                    .require('WAWebJidToWid')
++                    .userJidToUserWid(serialized.chatJid)._serialized ||
++                window
++                    .require('WAWebJidToWid')
++                    .userJidToUserWid(serialized.chatJid).$1;
+             delete serialized.chatJid;
+ 
+             return serialized;
+@@ -3409,7 +3421,7 @@ class Client extends EventEmitter {
+         const pollVotes = await this.pupPage.evaluate(async (msg) => {
+             const msgKey = window
+                 .require('WAWebMsgKey')
+-                .fromString(msg.id._serialized);
++                .fromString(msg.id._serialized || msg.id.$1);
+             let pollVotes = await window
+                 .require('WAWebPollsVotesSchema')
+                 .getTable()
+diff --git a/node_modules/whatsapp-web.js/src/structures/Base.js b/node_modules/whatsapp-web.js/src/structures/Base.js
+index ed1d83c..fbc87e6 100644
+--- a/node_modules/whatsapp-web.js/src/structures/Base.js
++++ b/node_modules/whatsapp-web.js/src/structures/Base.js
+@@ -12,6 +12,20 @@ class Base {
+         Object.defineProperty(this, 'client', { value: client });
+     }
+ 
++    /**
++     * Normalizes an ID object so `._serialized` keeps working even when
++     * WhatsApp Web only exposes the serialized form as `.$1`.
++     * See PR wwebjs/whatsapp-web.js#201832 and #201840.
++     * @param {object} id
++     * @returns {object}
++     */
++    static _normalizeId(id) {
++        if (id && id._serialized == null && id.$1 != null) {
++            return Object.assign({}, id, { _serialized: id.$1 });
++        }
++        return id;
++    }
++
+     _clone() {
+         return Object.assign(Object.create(this), this);
+     }
+diff --git a/node_modules/whatsapp-web.js/src/structures/Broadcast.js b/node_modules/whatsapp-web.js/src/structures/Broadcast.js
+index ce03dfa..f0bbb8e 100644
+--- a/node_modules/whatsapp-web.js/src/structures/Broadcast.js
++++ b/node_modules/whatsapp-web.js/src/structures/Broadcast.js
+@@ -19,7 +19,7 @@ class Broadcast extends Base {
+          * ID that represents the chat
+          * @type {object}
+          */
+-        this.id = data.id;
++        this.id = Base._normalizeId(data.id);
+ 
+         /**
+          * Unix timestamp of last status
+diff --git a/node_modules/whatsapp-web.js/src/structures/Call.js b/node_modules/whatsapp-web.js/src/structures/Call.js
+index c76558a..e4ae959 100644
+--- a/node_modules/whatsapp-web.js/src/structures/Call.js
++++ b/node_modules/whatsapp-web.js/src/structures/Call.js
+@@ -18,7 +18,7 @@ class Call extends Base {
+          * Call ID
+          * @type {string}
+          */
+-        this.id = data.id;
++        this.id = Base._normalizeId(data.id);
+         /**
+          * From
+          * @type {string}
+diff --git a/node_modules/whatsapp-web.js/src/structures/Channel.js b/node_modules/whatsapp-web.js/src/structures/Channel.js
+index cd3e087..25181de 100644
+--- a/node_modules/whatsapp-web.js/src/structures/Channel.js
++++ b/node_modules/whatsapp-web.js/src/structures/Channel.js
+@@ -29,7 +29,7 @@ class Channel extends Base {
+          * ID that represents the channel
+          * @type {ChannelId}
+          */
+-        this.id = data.id;
++        this.id = Base._normalizeId(data.id);
+ 
+         /**
+          * Title of the channel
+diff --git a/node_modules/whatsapp-web.js/src/structures/Chat.js b/node_modules/whatsapp-web.js/src/structures/Chat.js
+index 40211bf..79624e3 100644
+--- a/node_modules/whatsapp-web.js/src/structures/Chat.js
++++ b/node_modules/whatsapp-web.js/src/structures/Chat.js
+@@ -19,7 +19,7 @@ class Chat extends Base {
+          * ID that represents the chat
+          * @type {object}
+          */
+-        this.id = data.id;
++        this.id = Base._normalizeId(data.id);
+ 
+         /**
+          * Title of the chat
+diff --git a/node_modules/whatsapp-web.js/src/structures/Contact.js b/node_modules/whatsapp-web.js/src/structures/Contact.js
+index 4ee5194..6f3775d 100644
+--- a/node_modules/whatsapp-web.js/src/structures/Contact.js
++++ b/node_modules/whatsapp-web.js/src/structures/Contact.js
+@@ -26,7 +26,7 @@ class Contact extends Base {
+          * ID that represents the contact
+          * @type {ContactId}
+          */
+-        this.id = data.id;
++        this.id = Base._normalizeId(data.id);
+ 
+         /**
+          * Contact's phone number
+diff --git a/node_modules/whatsapp-web.js/src/structures/GroupChat.js b/node_modules/whatsapp-web.js/src/structures/GroupChat.js
+index 3cecc82..99b310e 100644
+--- a/node_modules/whatsapp-web.js/src/structures/GroupChat.js
++++ b/node_modules/whatsapp-web.js/src/structures/GroupChat.js
+@@ -156,7 +156,7 @@ class GroupChat extends Chat {
+                 };
+ 
+                 for (let pWid of participantWids) {
+-                    const pId = pWid._serialized;
++                    const pId = pWid._serialized || pWid.$1;
+                     pWid =
+                         pWid.server === 'lid'
+                             ? window
+@@ -170,7 +170,7 @@ class GroupChat extends Chat {
+                         isInviteV4Sent: false,
+                     };
+ 
+-                    if (groupParticipants.some((p) => p._serialized === pId)) {
++                    if (groupParticipants.some((p) => (p._serialized || p.$1) === pId)) {
+                         participantData[pId].code = 409;
+                         participantData[pId].message = errorCodes[409];
+                         continue;
+@@ -223,7 +223,7 @@ class GroupChat extends Chat {
+                                 .require('WAWebChatSendMessages')
+                                 .sendGroupInviteMessage(
+                                     userChat,
+-                                    group.id._serialized,
++                                    group.id._serialized || group.id.$1,
+                                     groupName,
+                                     rpcResult.inviteV4Code,
+                                     rpcResult.inviteV4CodeExp,
+@@ -274,10 +274,10 @@ class GroupChat extends Chat {
+ 
+                             return (
+                                 chat.groupMetadata.participants.get(
+-                                    lid?._serialized,
++                                    lid?._serialized || lid?.$1,
+                                 ) ||
+                                 chat.groupMetadata.participants.get(
+-                                    phone?._serialized,
++                                    phone?._serialized || phone?.$1,
+                                 )
+                             );
+                         }),
+@@ -312,10 +312,10 @@ class GroupChat extends Chat {
+ 
+                             return (
+                                 chat.groupMetadata.participants.get(
+-                                    lid?._serialized,
++                                    lid?._serialized || lid?.$1,
+                                 ) ||
+                                 chat.groupMetadata.participants.get(
+-                                    phone?._serialized,
++                                    phone?._serialized || phone?.$1,
+                                 )
+                             );
+                         }),
+@@ -350,10 +350,10 @@ class GroupChat extends Chat {
+ 
+                             return (
+                                 chat.groupMetadata.participants.get(
+-                                    lid?._serialized,
++                                    lid?._serialized || lid?.$1,
+                                 ) ||
+                                 chat.groupMetadata.participants.get(
+-                                    phone?._serialized,
++                                    phone?._serialized || phone?.$1,
+                                 )
+                             );
+                         }),
+diff --git a/node_modules/whatsapp-web.js/src/structures/GroupNotification.js b/node_modules/whatsapp-web.js/src/structures/GroupNotification.js
+index a723639..fbd61c1 100644
+--- a/node_modules/whatsapp-web.js/src/structures/GroupNotification.js
++++ b/node_modules/whatsapp-web.js/src/structures/GroupNotification.js
+@@ -18,7 +18,7 @@ class GroupNotification extends Base {
+          * ID that represents the groupNotification
+          * @type {object}
+          */
+-        this.id = data.id;
++        this.id = Base._normalizeId(data.id);
+ 
+         /**
+          * Extra content
+@@ -45,7 +45,7 @@ class GroupNotification extends Base {
+          */
+         this.chatId =
+             typeof data.id.remote === 'object'
+-                ? data.id.remote._serialized
++                ? Base._normalizeId(data.id.remote)._serialized
+                 : data.id.remote;
+ 
+         /**
+@@ -54,7 +54,7 @@ class GroupNotification extends Base {
+          */
+         this.author =
+             typeof data.author === 'object'
+-                ? data.author._serialized
++                ? Base._normalizeId(data.author)._serialized
+                 : data.author;
+ 
+         /**
+diff --git a/node_modules/whatsapp-web.js/src/structures/Message.js b/node_modules/whatsapp-web.js/src/structures/Message.js
+index dd977e8..eaa7daf 100644
+--- a/node_modules/whatsapp-web.js/src/structures/Message.js
++++ b/node_modules/whatsapp-web.js/src/structures/Message.js
+@@ -34,7 +34,7 @@ class Message extends Base {
+          * ID that represents the message
+          * @type {object}
+          */
+-        this.id = data.id;
++        this.id = Base._normalizeId(data.id);
+ 
+         /**
+          * ACK status for the message
+@@ -74,7 +74,7 @@ class Message extends Base {
+          */
+         this.from =
+             typeof data.from === 'object' && data.from !== null
+-                ? data.from._serialized
++                ? Base._normalizeId(data.from)._serialized
+                 : data.from;
+ 
+         /**
+@@ -86,7 +86,7 @@ class Message extends Base {
+          */
+         this.to =
+             typeof data.to === 'object' && data.to !== null
+-                ? data.to._serialized
++                ? Base._normalizeId(data.to)._serialized
+                 : data.to;
+ 
+         /**
+@@ -95,7 +95,7 @@ class Message extends Base {
+          */
+         this.author =
+             typeof data.author === 'object' && data.author !== null
+-                ? data.author._serialized
++                ? Base._normalizeId(data.author)._serialized
+                 : data.author;
+ 
+         /**
+@@ -210,13 +210,13 @@ class Message extends Base {
+                       groupName: data.inviteGrpName,
+                       fromId:
+                           typeof data.from === 'object' &&
+-                          '_serialized' in data.from
+-                              ? data.from._serialized
++                          (data.from._serialized || data.from.$1)
++                              ? Base._normalizeId(data.from)._serialized
+                               : data.from,
+                       toId:
+                           typeof data.to === 'object' &&
+-                          '_serialized' in data.to
+-                              ? data.to._serialized
++                          (data.to._serialized || data.to.$1)
++                              ? Base._normalizeId(data.to)._serialized
+                               : data.to,
+                   }
+                 : undefined;
+@@ -419,7 +419,9 @@ class Message extends Base {
+         return await Promise.all(
+             this.groupMentions.map(
+                 async (m) =>
+-                    await this.client.getChatById(m.groupJid._serialized),
++                    await this.client.getChatById(
++                        m.groupJid._serialized || m.groupJid.$1,
++                    ),
+             ),
+         );
+     }
+@@ -981,7 +983,7 @@ class Message extends Base {
+                     .sendEventEditMessage(eventOptions, msg);
+                 const editedMsg = window
+                     .require('WAWebCollections')
+-                    .Msg.get(msg.id._serialized);
++                    .Msg.get(msg.id._serialized || msg.id.$1);
+                 return editedMsg?.serialize();
+             },
+             this.id._serialized,
+diff --git a/node_modules/whatsapp-web.js/src/structures/Payment.js b/node_modules/whatsapp-web.js/src/structures/Payment.js
+index 113707b..072ee07 100644
+--- a/node_modules/whatsapp-web.js/src/structures/Payment.js
++++ b/node_modules/whatsapp-web.js/src/structures/Payment.js
+@@ -12,7 +12,7 @@ class Payment extends Base {
+          * The payment Id
+          * @type {object}
+          */
+-        this.id = data.id;
++        this.id = Base._normalizeId(data.id);
+ 
+         /**
+          * The payment currency
+diff --git a/node_modules/whatsapp-web.js/src/structures/Product.js b/node_modules/whatsapp-web.js/src/structures/Product.js
+index 108dccd..efaa9cc 100644
+--- a/node_modules/whatsapp-web.js/src/structures/Product.js
++++ b/node_modules/whatsapp-web.js/src/structures/Product.js
+@@ -19,7 +19,7 @@ class Product extends Base {
+          * Product ID
+          * @type {string}
+          */
+-        this.id = data.id;
++        this.id = Base._normalizeId(data.id);
+         /**
+          * Price
+          * @type {string}
+diff --git a/node_modules/whatsapp-web.js/src/structures/ProductMetadata.js b/node_modules/whatsapp-web.js/src/structures/ProductMetadata.js
+index 0c219f0..13d72a9 100644
+--- a/node_modules/whatsapp-web.js/src/structures/ProductMetadata.js
++++ b/node_modules/whatsapp-web.js/src/structures/ProductMetadata.js
+@@ -9,7 +9,7 @@ class ProductMetadata extends Base {
+ 
+     _patch(data) {
+         /** Product ID */
+-        this.id = data.id;
++        this.id = Base._normalizeId(data.id);
+         /** Retailer ID */
+         this.retailer_id = data.retailer_id;
+         /** Product Name  */
+diff --git a/node_modules/whatsapp-web.js/src/structures/Reaction.js b/node_modules/whatsapp-web.js/src/structures/Reaction.js
+index d763124..13b6ab6 100644
+--- a/node_modules/whatsapp-web.js/src/structures/Reaction.js
++++ b/node_modules/whatsapp-web.js/src/structures/Reaction.js
+@@ -18,7 +18,7 @@ class Reaction extends Base {
+          * Reaction ID
+          * @type {object}
+          */
+-        this.id = data.msgKey;
++        this.id = Base._normalizeId(data.msgKey);
+         /**
+          * Orphan
+          * @type {number}
+diff --git a/node_modules/whatsapp-web.js/src/util/Injected/Utils.js b/node_modules/whatsapp-web.js/src/util/Injected/Utils.js
+index 540078a..1662289 100644
+--- a/node_modules/whatsapp-web.js/src/util/Injected/Utils.js
++++ b/node_modules/whatsapp-web.js/src/util/Injected/Utils.js
+@@ -582,7 +582,7 @@ exports.LoadUtils = () => {
+ 
+         return window
+             .require('WAWebCollections')
+-            .Msg.get(newMsgKey._serialized);
++            .Msg.get(newMsgKey._serialized || newMsgKey.$1);
+     };
+ 
+     window.WWebJS.editMessage = async (msg, content, options = {}) => {
+@@ -625,7 +625,9 @@ exports.LoadUtils = () => {
+         await window
+             .require('WAWebSendMessageEditAction')
+             .sendMessageEdit(msg, content, internalOptions);
+-        return window.require('WAWebCollections').Msg.get(msg.id._serialized);
++        return window.require('WAWebCollections').Msg.get(
++            msg.id._serialized || msg.id.$1,
++        );
+     };
+ 
+     window.WWebJS.toStickerData = async (mediaInfo) => {
+@@ -830,7 +832,7 @@ exports.LoadUtils = () => {
+ 
+         if (typeof msg.id.remote === 'object') {
+             msg.id = Object.assign({}, msg.id, {
+-                remote: msg.id.remote._serialized,
++                remote: msg.id.remote._serialized || msg.id.remote.$1,
+             });
+         }
+ 
+@@ -953,7 +955,7 @@ exports.LoadUtils = () => {
+             model.isGroup = true;
+             const chatWid = window
+                 .require('WAWebWidFactory')
+-                .createWid(chat.id._serialized);
++                .createWid(chat.id._serialized || chat.id.$1);
+             const groupMetadata =
+                 window.require('WAWebCollections').GroupMetadata ||
+                 window.require('WAWebCollections').WAWebGroupMetadataCollection;
+@@ -984,12 +986,16 @@ exports.LoadUtils = () => {
+             const lastMessage = chat.lastReceivedKey
+                 ? window
+                       .require('WAWebCollections')
+-                      .Msg.get(chat.lastReceivedKey._serialized) ||
++                      .Msg.get(
++                          chat.lastReceivedKey._serialized ||
++                              chat.lastReceivedKey.$1,
++                      ) ||
+                   (
+                       await window
+                           .require('WAWebCollections')
+                           .Msg.getMessagesById([
+-                              chat.lastReceivedKey._serialized,
++                              chat.lastReceivedKey._serialized ||
++                                  chat.lastReceivedKey.$1,
+                           ])
+                   )?.messages?.[0]
+                 : null;
+@@ -1263,9 +1269,10 @@ exports.LoadUtils = () => {
+     };
+ 
+     window.WWebJS.rejectCall = async (peerJid, id) => {
+-        let userId = window
+-            .require('WAWebUserPrefsMeUser')
+-            .getMaybeMePnUser()._serialized;
++        let userId =
++            window.require('WAWebUserPrefsMeUser').getMaybeMePnUser()
++                ._serialized ||
++            window.require('WAWebUserPrefsMeUser').getMaybeMePnUser().$1;
+ 
+         const stanza = window.require('WAWap').wap(
+             'call',
+@@ -1575,9 +1582,13 @@ exports.LoadUtils = () => {
+                                       .membershipRequestsActionRejectParticipantMixins
+                                       ?.value.error;
+                             return {
+-                                requesterId: window
+-                                    .require('WAWebWidFactory')
+-                                    .createWid(p.jid)._serialized,
++                                requesterId:
++                                    window
++                                        .require('WAWebWidFactory')
++                                        .createWid(p.jid)._serialized ||
++                                    window
++                                        .require('WAWebWidFactory')
++                                        .createWid(p.jid).$1,
+                                 ...(error
+                                     ? {
+                                           error: +error,
+@@ -1594,11 +1605,19 @@ exports.LoadUtils = () => {
+                     }
+                 } else {
+                     result.push({
+-                        requesterId: window
+-                            .require('WAWebJidToWid')
+-                            .userJidToUserWid(
+-                                participant.participantArgs[0].participantJid,
+-                            )._serialized,
++                        requesterId:
++                            window
++                                .require('WAWebJidToWid')
++                                .userJidToUserWid(
++                                    participant.participantArgs[0]
++                                        .participantJid,
++                                )._serialized ||
++                            window
++                                .require('WAWebJidToWid')
++                                .userJidToUserWid(
++                                    participant.participantArgs[0]
++                                        .participantJid,
++                                ).$1,
+                         message: 'ServerStatusCodeError',
+                     });
+                 }
