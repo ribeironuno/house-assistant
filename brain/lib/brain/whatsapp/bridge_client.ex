@@ -35,7 +35,12 @@ defmodule Brain.WhatsApp.BridgeClient do
         []
       end
 
-    case Req.post(bridge_url, json: %{to: group_id, text: text}, headers: headers) do
+    case Req.post(bridge_url,
+           json: %{to: group_id, text: text},
+           headers: headers,
+           connect_timeout: 5_000,
+           receive_timeout: 15_000
+         ) do
       {:ok, %Req.Response{status: 200}} ->
         Logger.info("[Brain] Mensagem confirmada pela ponte (Bridge)")
         :ok

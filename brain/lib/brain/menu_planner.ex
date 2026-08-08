@@ -68,10 +68,10 @@ defmodule Brain.MenuPlanner do
       preferences = MealFeedback.summarize(group_id)
       today = DateTime.now!(@timezone)
 
-      prompt = MenuPromptHelper.build(pantry_items, history, preferences, constraints_raw, today)
-      user_prompt = "Gera o menu da semana respeitando as restrições dadas."
+      {system_prompt, user_prompt} =
+        MenuPromptHelper.build(pantry_items, history, preferences, constraints_raw, today)
 
-      case provider().generate_menu(prompt, user_prompt, @schema) do
+      case provider().generate_menu(system_prompt, user_prompt, @schema) do
         {:ok, %{"menu" => meals}} when is_list(meals) ->
           persist_and_reply(meals, group_id, constraints_raw)
 

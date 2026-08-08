@@ -1,22 +1,25 @@
 defmodule Brain.LLM.MenuPromptHelper do
   @moduledoc """
-  Builds the system prompt for weekly dinner menu generation.
+  Builds the system and user prompts for weekly dinner menu generation.
 
   Unlike the lightweight classification prompt in `Brain.LLM.PromptHelper`,
   this prompt receives heavy context (full pantry, meal history, learned
   preferences) and is only invoked when the classifier resolves to
   `generate_menu`.
+
+  User-controlled data (pantry names, meal history, constraints) is kept in
+  the user message, never in the system prompt, to defend against prompt
+  injection.
   """
 
   @timezone "Europe/Lisbon"
+  @max_constraints_length 200
 
   def build(pantry_items, history, preferences, constraints_raw, today) do
-    today
-    |> base_prompt()
-    |> inject_context(pantry_items, history, preferences, constraints_raw)
+    {system_prompt(today), user_prompt(pantry_items, history, preferences, constraints_raw)}
   end
 
-  defp base_prompt(now) do
+  defp system_prompt(now) do
     """
     You are the meal planner for a Portuguese family. You create weekly dinner menus.
 
@@ -31,12 +34,12 @@ defmodule Brain.LLM.MenuPromptHelper do
     - Portuguese cuisine focus: bacalhau, carne assada, sopas, arroz de pato, feijoada,
       açorda, polvo à lagareiro, etc. Propose variety across the week.
     - Creativity is welcome, but every dish must be recognizably Portuguese — no random fusion.
-    - Do NOT repeat dishes already served in the recent history (list below).
+    - Do NOT repeat dishes already served in the recent history (see the user message).
     - Do not repeat the same main protein more than 2 times in the week.
-    - Prefer dishes that use existing pantry items; anything not already at home goes into
-      `needs_to_buy`.
-    - Respect the user's constraints literally (e.g. "quarta rápido" -> low prep time on
-      Wednesday; "4 doses" -> scale portions/quantities accordingly).
+    - Prefer dishes that use the pantry items listed in the user message; anything not already
+      at home goes into `needs_to_buy`.
+    - Respect the user's constraints in the user message literally (e.g. "quarta rápido" -> low
+      prep time on Wednesday; "4 doses" -> scale portions/quantities accordingly).
     - Always return the FULL recipe (ingredients + steps) for every day, even though it will
       not be shown immediately.
 
@@ -62,11 +65,12 @@ defmodule Brain.LLM.MenuPromptHelper do
 
     Exactly 7 entries in `menu`, one per day, starting tomorrow.
     """
+    |> String.trim()
   end
 
-  defp inject_context(prompt, pantry_items, history, preferences, constraints_raw) do
+  defp user_prompt(pantry_items, history, preferences, constraints_raw) do
     """
-    #{prompt}
+    Generate the weekly menu based on the context below.
 
     ## Pantry (currently at home)
     #{format_pantry(pantry_items)}
@@ -102,7 +106,7 @@ defmodule Brain.LLM.MenuPromptHelper do
   end
 
   defp format_constraints(""), do: "(none)"
-  defp format_constraints(constraints), do: constraints
+  defp format_constraints(constraints), do: String.slice(constraints, 0, @max_constraints_length)
 
   defp format_datetime(dt), do: Calendar.strftime(dt, "%Y-%m-%d %H:%M (%A)")
   defp format_weekday(dt), do: Calendar.strftime(dt, "%A")

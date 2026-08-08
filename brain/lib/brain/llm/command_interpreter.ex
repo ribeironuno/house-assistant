@@ -45,8 +45,10 @@ defmodule Brain.LLM.CommandInterpreter do
 
   def interpret(text) when is_binary(text) do
     if enabled?() do
+      capped_text = String.slice(text, 0, 500)
+
       user_prompt =
-        "Message: #{text}\nCurrent date/time UTC: #{DateTime.utc_now() |> DateTime.to_iso8601()}"
+        "Message: #{capped_text}\nCurrent date/time UTC: #{DateTime.utc_now() |> DateTime.to_iso8601()}"
 
       case provider().generate_structured(PromptHelper.build(), user_prompt, @schema) do
         {:ok, interpretation} -> to_canonical_command(interpretation)
