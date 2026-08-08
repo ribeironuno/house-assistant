@@ -31,6 +31,18 @@ if database_url = System.get_env("DATABASE_URL") do
     pool_size: String.to_integer(System.get_env("POOL_SIZE") || "10")
 end
 
+if webhook_secret = System.get_env("WEBHOOK_SECRET") do
+  config :brain, webhook_secret: webhook_secret
+end
+
+if target_group_id = System.get_env("TARGET_GROUP_ID") do
+  config :brain, target_group_id: target_group_id
+end
+
+if bridge_auth_token = System.get_env("BRIDGE_AUTH_TOKEN") do
+  config :brain, bridge_auth_token: bridge_auth_token
+end
+
 if config_env() == :prod do
   # The secret key base is used to sign/encrypt cookies and other secrets.
   # A default value is used in config/dev.exs and config/test.exs but you

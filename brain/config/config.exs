@@ -9,7 +9,10 @@ import Config
 
 config :brain,
   ecto_repos: [Brain.Repo],
-  generators: [timestamp_type: :utc_datetime]
+  generators: [timestamp_type: :utc_datetime],
+  webhook_secret: nil,
+  target_group_id: nil,
+  bridge_auth_token: nil
 
 # Configures the endpoint
 config :brain, BrainWeb.Endpoint,

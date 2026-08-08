@@ -12,13 +12,14 @@
  * Environment variables:
  *   PORT              — HTTP port (default: 3000)
  *   ELIXIR_WEBHOOK_URL — Brain webhook URL (default: http://localhost:4000/webhook/whatsapp)
- *   TARGET_GROUP_ID   — WhatsApp group JID to accept messages from (e.g. 120363...@g.us)
+ *   TARGET_GROUP_ID   — WhatsApp group JID to accept messages from (e.g. 120363...@g.us) [required]
+ *   BRIDGE_AUTH_TOKEN — Shared secret for /send and /health (empty = no auth, dev only)
  */
 
 import qrcode from "qrcode-terminal";
 import pkg from "whatsapp-web.js";
 
-import { PORT, TARGET_GROUP_ID } from "./src/config.js";
+import { PORT, TARGET_GROUP_ID, BRIDGE_AUTH_TOKEN } from "./src/config.js";
 import { handleIncomingMessage } from "./src/handler.js";
 import { createServer } from "./src/server.js";
 
@@ -73,7 +74,10 @@ client.on("message_create", async (message) => {
   await handleIncomingMessage(client, message);
 });
 
-const app = createServer(client, () => isConnected, { targetGroupId: TARGET_GROUP_ID });
+const app = createServer(client, () => isConnected, {
+  targetGroupId: TARGET_GROUP_ID,
+  authToken: BRIDGE_AUTH_TOKEN,
+});
 
 app.listen(PORT, () => {
   console.log(`[Bridge] Listening on port ${PORT}`);

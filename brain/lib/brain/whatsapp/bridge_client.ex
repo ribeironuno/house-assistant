@@ -22,12 +22,20 @@ defmodule Brain.WhatsApp.BridgeClient do
 
   defp do_send_message(group_id, text) do
     bridge_url = bridge_send_url()
+    auth_token = Application.get_env(:brain, :bridge_auth_token)
 
     Logger.info(
       "[Brain] A enviar mensagem '#{text}' para o grupo [#{group_id}] via #{bridge_url}"
     )
 
-    case Req.post(bridge_url, json: %{to: group_id, text: text}) do
+    headers =
+      if auth_token && auth_token != "" do
+        [{"authorization", "Bearer #{auth_token}"}]
+      else
+        []
+      end
+
+    case Req.post(bridge_url, json: %{to: group_id, text: text}, headers: headers) do
       {:ok, %Req.Response{status: 200}} ->
         Logger.info("[Brain] Mensagem confirmada pela ponte (Bridge)")
         :ok

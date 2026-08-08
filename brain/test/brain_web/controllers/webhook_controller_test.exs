@@ -5,6 +5,63 @@ defmodule BrainWeb.WebhookControllerTest do
     :ok = Ecto.Adapters.SQL.Sandbox.checkout(Brain.Repo)
   end
 
+  test "POST /webhook/whatsapp returns 401 when WEBHOOK_SECRET is set and header is missing",
+       %{conn: conn} do
+    original = Application.get_env(:brain, :webhook_secret)
+    Application.put_env(:brain, :webhook_secret, "test-secret")
+
+    payload = %{
+      "group_id" => "12345@g.us",
+      "sender" => "67890@s.whatsapp.net",
+      "text" => "adiciona leite"
+    }
+
+    conn = post(conn, ~p"/webhook/whatsapp", payload)
+    assert json_response(conn, 401)
+
+    Application.put_env(:brain, :webhook_secret, original)
+  end
+
+  test "POST /webhook/whatsapp succeeds when WEBHOOK_SECRET is set and header matches",
+       %{conn: conn} do
+    original = Application.get_env(:brain, :webhook_secret)
+    Application.put_env(:brain, :webhook_secret, "test-secret")
+
+    payload = %{
+      "group_id" => "12345@g.us",
+      "sender" => "67890@s.whatsapp.net",
+      "text" => "adiciona leite"
+    }
+
+    conn =
+      conn
+      |> put_req_header("x-webhook-token", "test-secret")
+      |> post(~p"/webhook/whatsapp", payload)
+
+    assert json_response(conn, 200) == %{"status" => "ok"}
+    assert length(Brain.Repo.all(Brain.ShoppingList.Item)) == 1
+
+    Application.put_env(:brain, :webhook_secret, original)
+  end
+
+  test "POST /webhook/whatsapp rejects group_id when target_group_id is configured and doesn't match",
+       %{conn: conn} do
+    original = Application.get_env(:brain, :target_group_id)
+    Application.put_env(:brain, :target_group_id, "99999@g.us")
+
+    payload = %{
+      "group_id" => "12345@g.us",
+      "sender" => "67890@s.whatsapp.net",
+      "text" => "adiciona leite"
+    }
+
+    conn = post(conn, ~p"/webhook/whatsapp", payload)
+    assert json_response(conn, 200) == %{"status" => "ignored"}
+    assert Brain.Repo.all(Brain.ShoppingList.Item) == []
+
+    Application.put_env(:brain, :target_group_id, original)
+  end
+
   test "POST /webhook/whatsapp handles unrecognized message without reply", %{conn: conn} do
     payload = %{
       "group_id" => "12345@g.us",
