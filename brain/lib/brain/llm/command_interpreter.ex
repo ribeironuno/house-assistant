@@ -69,9 +69,16 @@ defmodule Brain.LLM.CommandInterpreter do
 
   defp provider, do: Application.get_env(:brain, :llm_provider, Brain.LLM.Providers.Gemini)
 
-  defp to_canonical_command(%{"confidence" => c}) when c < @min_confidence, do: :ignore
+  # Confidence gate: requires a numeric confidence >= @min_confidence.
+  # Missing / non-numeric / below-threshold confidence is ignored so the
+  # gate cannot be bypassed by omitting the field.
+  defp to_canonical_command(%{"confidence" => c} = map)
+       when is_number(c) and c >= @min_confidence,
+       do: do_canonical(map)
 
-  defp to_canonical_command(%{"action" => "add_items", "items" => items}) when is_list(items) do
+  defp to_canonical_command(_), do: :ignore
+
+  defp do_canonical(%{"action" => "add_items", "items" => items}) when is_list(items) do
     items
     |> Enum.map(&to_string/1)
     |> Enum.map(&String.trim/1)
@@ -82,18 +89,18 @@ defmodule Brain.LLM.CommandInterpreter do
     end
   end
 
-  defp to_canonical_command(%{"action" => "remove_item", "item" => item}) when is_binary(item) do
+  defp do_canonical(%{"action" => "remove_item", "item" => item}) when is_binary(item) do
     case String.trim(item) do
       "" -> :ignore
       trimmed -> {:ok, "remove " <> trimmed}
     end
   end
 
-  defp to_canonical_command(%{"action" => "list_items"}), do: {:ok, "lista"}
-  defp to_canonical_command(%{"action" => "clear_items"}), do: {:ok, "limpar lista"}
-  defp to_canonical_command(%{"action" => "help"}), do: {:ok, "ajuda"}
+  defp do_canonical(%{"action" => "list_items"}), do: {:ok, "lista"}
+  defp do_canonical(%{"action" => "clear_items"}), do: {:ok, "limpar lista"}
+  defp do_canonical(%{"action" => "help"}), do: {:ok, "ajuda"}
 
-  defp to_canonical_command(%{
+  defp do_canonical(%{
          "action" => "set_reminder",
          "reminder_text" => text,
          "reminder_time_phrase" => phrase
@@ -106,9 +113,9 @@ defmodule Brain.LLM.CommandInterpreter do
     end
   end
 
-  defp to_canonical_command(%{"action" => "ignore"}), do: :ignore
+  defp do_canonical(%{"action" => "ignore"}), do: :ignore
 
-  defp to_canonical_command(%{"action" => "add_pantry_items", "items" => items})
+  defp do_canonical(%{"action" => "add_pantry_items", "items" => items})
        when is_list(items) do
     clean_items =
       items
@@ -122,7 +129,7 @@ defmodule Brain.LLM.CommandInterpreter do
     end
   end
 
-  defp to_canonical_command(%{"action" => "remove_pantry_item", "item" => item})
+  defp do_canonical(%{"action" => "remove_pantry_item", "item" => item})
        when is_binary(item) do
     case String.trim(item) do
       "" -> :ignore
@@ -130,26 +137,26 @@ defmodule Brain.LLM.CommandInterpreter do
     end
   end
 
-  defp to_canonical_command(%{"action" => "list_pantry"}), do: {:ok, :list_pantry}
-  defp to_canonical_command(%{"action" => "clear_pantry"}), do: {:ok, :clear_pantry}
+  defp do_canonical(%{"action" => "list_pantry"}), do: {:ok, :list_pantry}
+  defp do_canonical(%{"action" => "clear_pantry"}), do: {:ok, :clear_pantry}
 
-  defp to_canonical_command(%{"action" => "generate_menu", "constraints" => constraints})
+  defp do_canonical(%{"action" => "generate_menu", "constraints" => constraints})
        when is_binary(constraints) do
     {:ok, {:generate_menu, String.trim(constraints)}}
   end
 
-  defp to_canonical_command(%{"action" => "generate_menu"}) do
+  defp do_canonical(%{"action" => "generate_menu"}) do
     {:ok, {:generate_menu, ""}}
   end
 
-  defp to_canonical_command(%{"action" => "get_recipe", "item" => item}) when is_binary(item) do
+  defp do_canonical(%{"action" => "get_recipe", "item" => item}) when is_binary(item) do
     case String.trim(item) do
       "" -> :ignore
       trimmed -> {:ok, {:get_recipe, trimmed}}
     end
   end
 
-  defp to_canonical_command(%{"action" => "rate_meal", "item" => item, "sentiment" => sentiment})
+  defp do_canonical(%{"action" => "rate_meal", "item" => item, "sentiment" => sentiment})
        when is_binary(item) and is_binary(sentiment) do
     case {String.trim(item), String.trim(sentiment)} do
       {"", _} -> :ignore
@@ -159,7 +166,7 @@ defmodule Brain.LLM.CommandInterpreter do
     end
   end
 
-  defp to_canonical_command(_), do: :ignore
+  defp do_canonical(_), do: :ignore
 
   defp log_and_ignore(reason) do
     Logger.warning("[Brain] LLM command interpreter ignored message: #{inspect(reason)}")

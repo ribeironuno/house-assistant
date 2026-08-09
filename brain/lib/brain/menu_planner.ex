@@ -162,8 +162,19 @@ defmodule Brain.MenuPlanner do
 
   defp format_date(""), do: ""
 
-  defp format_date(iso_date),
-    do: String.slice(iso_date, 8..9) <> "/" <> String.slice(iso_date, 5..6)
+  defp format_date(iso_date) do
+    case Date.from_iso8601(iso_date) do
+      {:ok, date} ->
+        "#{pad(date.day)}/#{pad(date.month)}"
+
+      _ ->
+        # LLM format drift — keep the raw value rather than slicing garbage.
+        iso_date
+    end
+  end
+
+  defp pad(n) when n < 10, do: "0#{n}"
+  defp pad(n), do: Integer.to_string(n)
 
   defp format_recipe(meal) do
     day = Map.get(meal, "day", "")

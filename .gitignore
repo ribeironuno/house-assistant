@@ -13,3 +13,4 @@ bridge/.wwebjs_cache/
 brain/_build/
 brain/deps/
 brain/*.ez
+erl_crash.dump

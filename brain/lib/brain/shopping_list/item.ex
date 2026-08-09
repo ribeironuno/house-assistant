@@ -29,6 +29,7 @@ defmodule Brain.ShoppingList.Item do
     shopping_item
     |> cast(attrs, [:name, :added_by, :done])
     |> validate_required([:name])
+    |> validate_length(:name, max: 255)
     |> update_change(:name, &String.trim/1)
   end
 end

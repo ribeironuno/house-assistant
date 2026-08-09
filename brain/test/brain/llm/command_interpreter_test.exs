@@ -127,4 +127,16 @@ defmodule Brain.LLM.CommandInterpreterTest do
 
     assert :ignore = CommandInterpreter.interpret("oi")
   end
+
+  test "missing confidence is ignored (gate cannot be bypassed by omitting the field)" do
+    reply(%{"action" => "list_pantry"})
+
+    assert :ignore = CommandInterpreter.interpret("oi")
+  end
+
+  test "non-numeric confidence is ignored" do
+    reply(%{"action" => "list_pantry", "confidence" => "high"})
+
+    assert :ignore = CommandInterpreter.interpret("oi")
+  end
 end

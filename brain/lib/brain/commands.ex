@@ -122,15 +122,20 @@ defmodule Brain.Commands do
         Brain.MenuPlanner.get_recipe(item, group_id)
 
       {:ok, {:rate_meal, meal, sentiment}} ->
-        Brain.MealFeedback.create(%{
-          group_id: group_id,
-          meal_name: meal,
-          sentiment: sentiment,
-          raw_text: trimmed_raw
-        })
-
         sentiment_text = if sentiment == "like", do: "gostei", else: "não gostei"
-        {:reply, "[BOT] 📝 Registado: #{sentiment_text} de #{meal}."}
+
+        case Brain.MealFeedback.create(%{
+               group_id: group_id,
+               meal_name: meal,
+               sentiment: sentiment,
+               raw_text: trimmed_raw
+             }) do
+          {:ok, _feedback} ->
+            {:reply, "[BOT] 📝 Registado: #{sentiment_text} de #{meal}."}
+
+          {:error, _changeset} ->
+            {:reply, "[BOT] 😕 Não consegui registar o teu feedback."}
+        end
 
       {:ok, canonical_command} ->
         route(canonical_command, String.downcase(canonical_command), sender, group_id, true)
