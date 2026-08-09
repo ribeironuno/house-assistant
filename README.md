@@ -177,7 +177,7 @@ Only Postgres runs in Docker. The bridge and brain run directly on your machine.
 ### 1. Configure
 
 ```bash
-cp .env.example .env      # then set TARGET_GROUP_ID
+cp .env.example .env      # optionally set BRIDGE_AUTH_TOKEN
 export GEMINI_API_KEY=your_key
 ```
 
@@ -226,7 +226,7 @@ node index.js             # scan the QR code on first run
 |---|---|---|
 | `PORT` | `3000` | Port the bridge HTTP server listens on |
 | `ELIXIR_WEBHOOK_URL` | `http://localhost:4000/webhook/whatsapp` | Where to forward incoming messages |
-| `TARGET_GROUP_ID` | configured group JID | WhatsApp group JID to filter messages (e.g. `120363…@g.us`) |
+| `BRIDGE_AUTH_TOKEN` | *(empty — no auth, dev only)* | Shared secret for the brain's /send and /leave calls |
 
 ### Brain
 
@@ -235,10 +235,11 @@ node index.js             # scan the QR code on first run
 | `GEMINI_API_KEY` | *(none — required)* | Google Gemini API key |
 | `GEMINI_MODEL` | `gemini-flash-latest` | Which Gemini model to use |
 | `BRIDGE_SEND_URL` | `http://localhost:3000/send` | Bridge endpoint for outgoing messages |
+| `BRIDGE_LEAVE_URL` | `http://localhost:3000/leave` | Bridge endpoint for leaving a group |
 | `DATABASE_URL` | *(from config)* | Postgres connection string |
 | `PHX_SERVER` | — | Set to `true` in Docker to auto-start the server |
 
-Copy `.env.example` to `.env` and fill in `TARGET_GROUP_ID` for your family group.
+Copy `.env.example` to `.env` and optionally set `BRIDGE_AUTH_TOKEN`.
 
 ---
 

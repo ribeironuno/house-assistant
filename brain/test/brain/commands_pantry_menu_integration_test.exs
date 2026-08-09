@@ -7,6 +7,8 @@ defmodule Brain.CommandsPantryMenuIntegrationTest do
   alias Brain.Pantry.Item
   alias Brain.Repo
 
+  @group_id "group_1"
+
   defmodule RoutingProvider do
     @behaviour Brain.LLM.Provider
 
@@ -89,7 +91,7 @@ defmodule Brain.CommandsPantryMenuIntegrationTest do
       "confidence" => 0.9
     })
 
-    assert {:reply, reply} = Commands.handle("tenho arroz, frango", "user_1")
+    assert {:reply, reply} = Commands.handle("tenho arroz, frango", "user_1", @group_id)
     assert reply =~ "[BOT] ✅ Adicionados à despensa:"
 
     items = Repo.all(Item)
@@ -97,11 +99,11 @@ defmodule Brain.CommandsPantryMenuIntegrationTest do
   end
 
   test "despensa command lists pantry end-to-end" do
-    Brain.Pantry.add_many(["arroz", "frango"], "user_1")
+    Brain.Pantry.add_many(["arroz", "frango"], @group_id, "user_1")
 
     classify(%{"action" => "list_pantry", "confidence" => 0.9})
 
-    assert {:reply, reply} = Commands.handle("o que tenho na despensa?", "user_1")
+    assert {:reply, reply} = Commands.handle("o que tenho na despensa?", "user_1", @group_id)
     assert reply =~ "[BOT] 🏠 Despensa:"
     assert reply =~ "arroz"
     assert reply =~ "frango"

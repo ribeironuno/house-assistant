@@ -3,6 +3,9 @@ defmodule Brain.ShoppingList do
   Shopping-list context.
 
   Owns parsing, persistence, and Portuguese responses for shopping commands.
+
+  Every item is scoped to the WhatsApp group that created it (`group_id`),
+  so each group sees only its own list.
   """
 
   import Ecto.Query
@@ -10,25 +13,25 @@ defmodule Brain.ShoppingList do
   alias Brain.Repo
   alias Brain.ShoppingList.Item
 
-  def add("", _sender) do
+  def add("", _group_id, _sender) do
     {:reply, "[BOT] Por favor especifica o item a adicionar, ex: 'adiciona leite'."}
   end
 
-  def add(item_text, sender) do
+  def add(item_text, group_id, sender) do
     item_names = parse_items(item_text)
 
     if item_names == [] do
       {:reply, "[BOT] Por favor especifica o item a adicionar, ex: 'adiciona leite'."}
     else
-      insert_items(item_names, sender)
+      insert_items(item_names, group_id, sender)
     end
   end
 
-  def remove("") do
+  def remove("", _group_id) do
     {:reply, "[BOT] Por favor especifica o item a remover, ex: 'remove leite'."}
   end
 
-  def remove(search_term) do
+  def remove(search_term, group_id) do
     cleaned = Brain.Text.strip_leading_articles(search_term)
 
     if cleaned == "" do
@@ -36,7 +39,7 @@ defmodule Brain.ShoppingList do
     else
       query =
         from(i in Item,
-          where: i.done == false and ilike(i.name, ^"%#{cleaned}%"),
+          where: i.done == false and i.group_id == ^group_id and ilike(i.name, ^"%#{cleaned}%"),
           order_by: [desc: i.inserted_at],
           limit: 1
         )
@@ -52,10 +55,10 @@ defmodule Brain.ShoppingList do
     end
   end
 
-  def list do
+  def list(group_id) do
     query =
       from(i in Item,
-        where: i.done == false,
+        where: i.done == false and i.group_id == ^group_id,
         order_by: [asc: i.inserted_at]
       )
 
@@ -68,15 +71,18 @@ defmodule Brain.ShoppingList do
     end
   end
 
-  def clear do
-    from(i in Item, where: i.done == false)
+  def clear(group_id) do
+    from(i in Item, where: i.done == false and i.group_id == ^group_id)
     |> Repo.delete_all()
 
     {:reply, "[BOT] 🧹 Lista de compras limpa."}
   end
 
-  def get_active_items do
-    from(i in Item, where: i.done == false, order_by: [asc: i.inserted_at])
+  def get_active_items(group_id) do
+    from(i in Item,
+      where: i.done == false and i.group_id == ^group_id,
+      order_by: [asc: i.inserted_at]
+    )
     |> Repo.all()
   end
 
@@ -94,10 +100,10 @@ defmodule Brain.ShoppingList do
     |> Enum.reject(&(&1 == ""))
   end
 
-  defp insert_items(item_names, sender) do
+  defp insert_items(item_names, group_id, sender) do
     inserted_items =
       Enum.map(item_names, fn name ->
-        changeset = Item.changeset(%Item{}, %{name: name, added_by: sender})
+        changeset = Item.changeset(%Item{}, %{name: name, added_by: sender, group_id: group_id})
         Repo.insert(changeset)
       end)
 

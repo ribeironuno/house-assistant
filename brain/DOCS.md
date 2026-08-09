@@ -282,7 +282,7 @@ the bot from reacting to ambiguous messages.
 | `send_outgoing_messages` | `true` | Master switch — when `false`, the Brain logs but never sends messages. |
 | `reminder_dispatch_interval_ms` | `30000` | How often the reminder dispatcher polls (milliseconds). |
 | `BRIDGE_SEND_URL` | `http://localhost:3000/send` | Where to send outgoing messages. |
-| `TARGET_GROUP_ID` | (set in .env) | Which WhatsApp group the bot responds to. |
+| `BRIDGE_LEAVE_URL` | `http://localhost:3000/leave` | Where to ask the bridge to leave a group. |
 
 ---
 
@@ -290,11 +290,12 @@ the bot from reacting to ambiguous messages.
 
 | Table | Purpose |
 |-------|---------|
-| `shopping_items` | Grocery list items (active or done) |
-| `reminders` | Scheduled reminders with fire time |
-| `pantry_items` | Food items currently at home |
-| `weekly_menus` | Generated menus with full recipes (JSON) |
-| `meal_feedback` | Like/dislike records per dish |
+| `groups` | WhatsApp group registration — tracks activation status (`pending`, `active`, `left`) |
+| `shopping_items` | Grocery list items (active or done), scoped per group |
+| `reminders` | Scheduled reminders with fire time, scoped per group |
+| `pantry_items` | Food items currently at home, scoped per group |
+| `weekly_menus` | Generated menus with full recipes (JSON), scoped per group |
+| `meal_feedback` | Like/dislike records per dish, scoped per group |
 
 Tables are linked by `group_id` (WhatsApp group JID string). There are no foreign keys.
 

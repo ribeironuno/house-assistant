@@ -63,7 +63,7 @@ defmodule Brain.MenuPlanner do
 
   def generate(constraints_raw, group_id) when is_binary(constraints_raw) do
     if enabled?() do
-      pantry_items = Pantry.get_all()
+      pantry_items = Pantry.get_all(group_id)
       history = MenuHistory.recent_meals(group_id, weeks: 4)
       preferences = MealFeedback.summarize(group_id)
       today = DateTime.now!(@timezone)

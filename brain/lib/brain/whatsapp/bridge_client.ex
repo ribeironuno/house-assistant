@@ -16,15 +16,26 @@ defmodule Brain.WhatsApp.BridgeClient do
 
       :ok
     else
-      do_send_message(group_id, text)
+      do_post(bridge_send_url(), %{to: group_id, text: text})
     end
   end
 
-  defp do_send_message(group_id, text) do
-    bridge_url = bridge_send_url()
+  @doc """
+  Asks the Bridge to leave a WhatsApp group.
+  """
+  def leave_group(group_id) do
+    if Application.get_env(:brain, :send_outgoing_messages, true) == false do
+      Logger.info("[Brain] Outgoing messages disabled by config: leave group #{group_id}")
+      :ok
+    else
+      do_post(bridge_leave_url(), %{group_id: group_id})
+    end
+  end
+
+  defp do_post(url, body) do
     auth_token = Application.get_env(:brain, :bridge_auth_token)
 
-    Logger.info("[Brain] Sending message '#{text}' to group [#{group_id}] via #{bridge_url}")
+    Logger.info("[Brain] POSTing to bridge #{url}: #{inspect(body)}")
 
     headers =
       if auth_token && auth_token != "" do
@@ -33,14 +44,14 @@ defmodule Brain.WhatsApp.BridgeClient do
         []
       end
 
-    case Req.post(bridge_url,
-           json: %{to: group_id, text: text},
+    case Req.post(url,
+           json: body,
            headers: headers,
            connect_options: [timeout: 5_000],
            receive_timeout: 15_000
          ) do
       {:ok, %Req.Response{status: 200}} ->
-        Logger.info("[Brain] Message confirmed by the Bridge")
+        Logger.info("[Brain] Bridge request confirmed")
         :ok
 
       {:ok, %Req.Response{status: status, body: body}} ->
@@ -63,5 +74,14 @@ defmodule Brain.WhatsApp.BridgeClient do
         else: "http://localhost:3000/send"
 
     System.get_env("BRIDGE_SEND_URL", default_bridge_url)
+  end
+
+  defp bridge_leave_url do
+    default_bridge_url =
+      if System.get_env("PHX_SERVER") == "true",
+        do: "http://bridge:3000/leave",
+        else: "http://localhost:3000/leave"
+
+    System.get_env("BRIDGE_LEAVE_URL", default_bridge_url)
   end
 end

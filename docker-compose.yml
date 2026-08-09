@@ -20,7 +20,6 @@ services:
     environment:
       - PORT=3000
       - ELIXIR_WEBHOOK_URL=${ELIXIR_WEBHOOK_URL:-http://brain:4000/webhook/whatsapp}
-      - TARGET_GROUP_ID=${TARGET_GROUP_ID:-}
     volumes:
       - baileys_auth:/app/.wwebjs_auth
     restart: unless-stopped
@@ -33,6 +32,7 @@ services:
     environment:
       - PORT=4000
       - BRIDGE_SEND_URL=${BRIDGE_SEND_URL:-http://bridge:3000/send}
+      - BRIDGE_LEAVE_URL=${BRIDGE_LEAVE_URL:-http://bridge:3000/leave}
       - DATABASE_URL=ecto://postgres:postgres@db:5432/house_assistant_dev
       - PHX_SERVER=true
     depends_on:

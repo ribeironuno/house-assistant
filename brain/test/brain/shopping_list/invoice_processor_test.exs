@@ -10,17 +10,19 @@ defmodule Brain.ShoppingList.InvoiceProcessorTest do
   alias Brain.ShoppingList.InvoiceProcessor
   alias Brain.ShoppingList.Item
 
+  @group_id "group_1"
+
   setup do
     :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)
     on_exit(fn -> TestStub.reset() end)
   end
 
   test "match_and_remove matches receipt items against DB and removes them" do
-    ShoppingList.add("leite, ovos, manteiga", "user_1")
+    ShoppingList.add("leite, ovos, manteiga", @group_id, "user_1")
 
     purchased_items = ["leite", "ovos", "pão de forma"]
 
-    assert {:reply, reply} = InvoiceProcessor.match_and_remove(purchased_items)
+    assert {:reply, reply} = InvoiceProcessor.match_and_remove(purchased_items, @group_id)
 
     assert reply =~ "[BOT] 🧾 Fatura processada!"
     assert reply =~ "• leite"
@@ -33,11 +35,11 @@ defmodule Brain.ShoppingList.InvoiceProcessorTest do
   end
 
   test "match_and_remove does NOT delete items for different products (no false positives)" do
-    ShoppingList.add("leite, arroz, salada", "user_1")
+    ShoppingList.add("leite, arroz, salada", @group_id, "user_1")
 
     purchased_items = ["leite de coco", "arroz de marisco", "sal"]
 
-    assert {:reply, reply} = InvoiceProcessor.match_and_remove(purchased_items)
+    assert {:reply, reply} = InvoiceProcessor.match_and_remove(purchased_items, @group_id)
 
     assert reply =~ "nenhum dos produtos comprados estava na tua lista de compras"
 
@@ -46,11 +48,11 @@ defmodule Brain.ShoppingList.InvoiceProcessorTest do
   end
 
   test "match_and_remove enforces 1:1 — one receipt item deletes at most one list item" do
-    ShoppingList.add("leite, leite magro, manteiga", "user_1")
+    ShoppingList.add("leite, leite magro, manteiga", @group_id, "user_1")
 
     purchased_items = ["leite"]
 
-    assert {:reply, reply} = InvoiceProcessor.match_and_remove(purchased_items)
+    assert {:reply, reply} = InvoiceProcessor.match_and_remove(purchased_items, @group_id)
 
     remaining = Repo.all(Item)
     assert length(remaining) == 2
@@ -59,7 +61,7 @@ defmodule Brain.ShoppingList.InvoiceProcessorTest do
   end
 
   test "match_and_remove uses LLM semantic matching for descriptor-heavy receipt names" do
-    ShoppingList.add("leite, piripiri", "user_1")
+    ShoppingList.add("leite, piripiri", @group_id, "user_1")
 
     TestStub.set_response(
       {:ok,
@@ -73,7 +75,7 @@ defmodule Brain.ShoppingList.InvoiceProcessorTest do
 
     purchased_items = ["leite meio gordo mimosa", "tabasco"]
 
-    assert {:reply, reply} = InvoiceProcessor.match_and_remove(purchased_items)
+    assert {:reply, reply} = InvoiceProcessor.match_and_remove(purchased_items, @group_id)
 
     assert reply =~ "• leite"
     assert reply =~ "• piripiri"
@@ -85,7 +87,7 @@ defmodule Brain.ShoppingList.InvoiceProcessorTest do
   test "match_and_remove when DB list is empty" do
     purchased_items = ["leite", "pão"]
 
-    assert {:reply, reply} = InvoiceProcessor.match_and_remove(purchased_items)
+    assert {:reply, reply} = InvoiceProcessor.match_and_remove(purchased_items, @group_id)
 
     assert reply =~ "[BOT] 🧾 Fatura lida com sucesso!"
     assert reply =~ "lista de compras estava vazia"
@@ -94,21 +96,22 @@ defmodule Brain.ShoppingList.InvoiceProcessorTest do
   end
 
   test "match_and_remove when no items match" do
-    ShoppingList.add("sabão", "user_1")
+    ShoppingList.add("sabão", @group_id, "user_1")
     purchased_items = ["leite", "pão"]
 
-    assert {:reply, reply} = InvoiceProcessor.match_and_remove(purchased_items)
+    assert {:reply, reply} = InvoiceProcessor.match_and_remove(purchased_items, @group_id)
 
     assert reply =~ "nenhum dos produtos comprados estava na tua lista"
     assert length(Repo.all(Item)) == 1
   end
 
   test "match_and_remove adds purchased items to the pantry" do
-    ShoppingList.add("leite", "user_1")
+    ShoppingList.add("leite", @group_id, "user_1")
 
     purchased_items = ["leite", "pão de forma"]
 
-    assert {:reply, reply} = InvoiceProcessor.match_and_remove(purchased_items, "user_1")
+    assert {:reply, reply} =
+             InvoiceProcessor.match_and_remove(purchased_items, @group_id, "user_1")
 
     assert reply =~ "🏠 Adicionados à despensa:"
     assert reply =~ "• leite"
@@ -122,7 +125,8 @@ defmodule Brain.ShoppingList.InvoiceProcessorTest do
   test "match_and_remove adds items to pantry even when shopping list is empty" do
     purchased_items = ["arroz"]
 
-    assert {:reply, reply} = InvoiceProcessor.match_and_remove(purchased_items, "user_2")
+    assert {:reply, reply} =
+             InvoiceProcessor.match_and_remove(purchased_items, @group_id, "user_2")
 
     assert reply =~ "lista de compras estava vazia"
     assert reply =~ "🏠 Adicionados à despensa:"
@@ -132,10 +136,10 @@ defmodule Brain.ShoppingList.InvoiceProcessorTest do
   end
 
   test "match_and_remove does not duplicate items already in the pantry" do
-    Pantry.add_many(["leite"], "user_1")
-    ShoppingList.add("leite", "user_1")
+    Pantry.add_many(["leite"], @group_id, "user_1")
+    ShoppingList.add("leite", @group_id, "user_1")
 
-    assert {:reply, reply} = InvoiceProcessor.match_and_remove(["leite"], "user_1")
+    assert {:reply, reply} = InvoiceProcessor.match_and_remove(["leite"], @group_id, "user_1")
 
     refute reply =~ "🏠 Adicionados à despensa:"
     assert length(Repo.all(PantryItem)) == 1

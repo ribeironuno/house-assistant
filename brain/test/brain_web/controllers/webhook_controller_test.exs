@@ -1,6 +1,8 @@
 defmodule BrainWeb.WebhookControllerTest do
   use BrainWeb.ConnCase
 
+  @group_id "group_1"
+
   setup do
     :ok = Ecto.Adapters.SQL.Sandbox.checkout(Brain.Repo)
   end
@@ -11,7 +13,7 @@ defmodule BrainWeb.WebhookControllerTest do
     Application.put_env(:brain, :webhook_secret, "test-secret")
 
     payload = %{
-      "group_id" => "12345@g.us",
+      "group_id" => @group_id,
       "sender" => "67890@s.whatsapp.net",
       "text" => "adiciona leite"
     }
@@ -24,11 +26,13 @@ defmodule BrainWeb.WebhookControllerTest do
 
   test "POST /webhook/whatsapp succeeds when WEBHOOK_SECRET is set and header matches",
        %{conn: conn} do
+    activate_group(@group_id)
+
     original = Application.get_env(:brain, :webhook_secret)
     Application.put_env(:brain, :webhook_secret, "test-secret")
 
     payload = %{
-      "group_id" => "12345@g.us",
+      "group_id" => @group_id,
       "sender" => "67890@s.whatsapp.net",
       "text" => "adiciona leite"
     }
@@ -44,27 +48,26 @@ defmodule BrainWeb.WebhookControllerTest do
     Application.put_env(:brain, :webhook_secret, original)
   end
 
-  test "POST /webhook/whatsapp rejects group_id when target_group_id is configured and doesn't match",
+  test "POST /webhook/whatsapp sends intro reply and does not process commands for unknown groups",
        %{conn: conn} do
-    original = Application.get_env(:brain, :target_group_id)
-    Application.put_env(:brain, :target_group_id, "99999@g.us")
-
     payload = %{
-      "group_id" => "12345@g.us",
+      "group_id" => "unknown_group",
       "sender" => "67890@s.whatsapp.net",
       "text" => "adiciona leite"
     }
 
     conn = post(conn, ~p"/webhook/whatsapp", payload)
-    assert json_response(conn, 200) == %{"status" => "ignored"}
-    assert Brain.Repo.all(Brain.ShoppingList.Item) == []
+    assert json_response(conn, 200) == %{"status" => "ok"}
 
-    Application.put_env(:brain, :target_group_id, original)
+    assert Brain.Repo.get(Brain.Groups.Group, "unknown_group").status == "pending"
+    assert Brain.Repo.all(Brain.ShoppingList.Item) == []
   end
 
   test "POST /webhook/whatsapp handles unrecognized message without reply", %{conn: conn} do
+    activate_group(@group_id)
+
     payload = %{
-      "group_id" => "12345@g.us",
+      "group_id" => @group_id,
       "sender" => "67890@s.whatsapp.net",
       "text" => "Olá mundo"
     }
@@ -75,8 +78,10 @@ defmodule BrainWeb.WebhookControllerTest do
 
   test "POST /webhook/whatsapp processes from_me:true messages (human commands from owner's phone)",
        %{conn: conn} do
+    activate_group(@group_id)
+
     payload = %{
-      "group_id" => "12345@g.us",
+      "group_id" => @group_id,
       "sender" => "67890@s.whatsapp.net",
       "text" => "adiciona leite",
       "from_me" => true
@@ -90,8 +95,10 @@ defmodule BrainWeb.WebhookControllerTest do
   test "POST /webhook/whatsapp ignores [BOT] prefixed messages to prevent echo loops", %{
     conn: conn
   } do
+    activate_group(@group_id)
+
     payload = %{
-      "group_id" => "12345@g.us",
+      "group_id" => @group_id,
       "sender" => "67890@s.whatsapp.net",
       "text" => "[BOT] ✅ Adicionado: leite",
       "from_me" => true
@@ -103,8 +110,10 @@ defmodule BrainWeb.WebhookControllerTest do
   end
 
   test "POST /webhook/whatsapp processes 'adiciona leite' command", %{conn: conn} do
+    activate_group(@group_id)
+
     payload = %{
-      "group_id" => "12345@g.us",
+      "group_id" => @group_id,
       "sender" => "67890@s.whatsapp.net",
       "text" => "adiciona leite"
     }
@@ -115,8 +124,10 @@ defmodule BrainWeb.WebhookControllerTest do
   end
 
   test "POST /webhook/whatsapp creates reminders", %{conn: conn} do
+    activate_group(@group_id)
+
     payload = %{
-      "group_id" => "12345@g.us",
+      "group_id" => @group_id,
       "sender" => "67890@s.whatsapp.net",
       "text" => "lembrar de pagar scouts daqui a 3 dias"
     }
@@ -126,12 +137,14 @@ defmodule BrainWeb.WebhookControllerTest do
 
     [reminder] = Brain.Repo.all(Brain.Reminders.Reminder)
     assert reminder.text == "pagar scouts"
-    assert reminder.group_id == "12345@g.us"
+    assert reminder.group_id == @group_id
   end
 
   test "POST /webhook/whatsapp processes media payload", %{conn: conn} do
+    activate_group(@group_id)
+
     payload = %{
-      "group_id" => "12345@g.us",
+      "group_id" => @group_id,
       "sender" => "67890@s.whatsapp.net",
       "text" => "",
       "media" => %{
@@ -142,5 +155,9 @@ defmodule BrainWeb.WebhookControllerTest do
 
     conn = post(conn, ~p"/webhook/whatsapp", payload)
     assert json_response(conn, 200) == %{"status" => "ok"}
+  end
+
+  defp activate_group(group_id) do
+    Brain.Groups.activate(group_id)
   end
 end

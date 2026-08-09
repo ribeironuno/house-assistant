@@ -14,54 +14,55 @@ function timingSafeEqual(a, b) {
 }
 
 /**
- * Creates the Express HTTP server with health check and send endpoints.
+ * Creates the Express HTTP server with health check, send, and leave endpoints.
  *
  * @param {object} client - The whatsapp-web.js Client instance.
  * @param {function} isConnectedFn - Returns current connection state.
  * @param {object} options
- * @param {string} options.targetGroupId
- * @param {string} options.authToken
+ * @param {string} options.authToken - Shared secret for /send and /leave (empty = no auth, dev only).
  * @returns {import("express").Express}
  */
-export function createServer(
-  client,
-  isConnectedFn,
-  { targetGroupId, authToken },
-) {
+export function createServer(client, isConnectedFn, { authToken }) {
   const app = express();
   app.use(express.json());
 
   const hasAuth = Boolean(authToken);
 
-  app.get("/health", (_, res) => {
-    res.json({
-      status: "ok",
-      connected: isConnectedFn(),
-    });
-  });
+  // ---------------------------------------------------------------------------
+  // Shared Bearer-token auth middleware (applies to /send and /leave).
+  // When no token is configured (dev), all requests are allowed through.
+  // ---------------------------------------------------------------------------
+  function requireToken(req, res, next) {
+    if (!hasAuth) return next();
 
-  app.post("/send", (req, res, next) => {
-    if (hasAuth) {
-      const header = req.headers.authorization;
-      if (!header || !header.startsWith("Bearer ")) {
-        return res.status(401).json({ error: "Missing or invalid token" });
-      }
-      const token = header.slice(7);
-      if (!timingSafeEqual(token, authToken)) {
-        return res.status(403).json({ error: "Invalid token" });
-      }
+    const header = req.headers.authorization;
+    if (!header || !header.startsWith("Bearer ")) {
+      return res.status(401).json({ error: "Missing or invalid token" });
     }
 
+    const token = header.slice(7);
+    if (!timingSafeEqual(token, authToken)) {
+      return res.status(403).json({ error: "Invalid token" });
+    }
+
+    return next();
+  }
+
+  // ---------------------------------------------------------------------------
+  // GET /health
+  // ---------------------------------------------------------------------------
+  app.get("/health", (_, res) => {
+    res.json({ status: "ok", connected: isConnectedFn() });
+  });
+
+  // ---------------------------------------------------------------------------
+  // POST /send — send a WhatsApp message to any group.
+  // ---------------------------------------------------------------------------
+  app.post("/send", requireToken, (req, res, next) => {
     const { to, text } = req.body;
 
     if (!to || typeof text !== "string" || !text) {
       return res.status(400).json({ error: "Missing 'to' or 'text'" });
-    }
-
-    if (to !== targetGroupId) {
-      return res
-        .status(400)
-        .json({ error: "Message target does not match the configured group" });
     }
 
     if (!isConnectedFn()) {
@@ -81,6 +82,36 @@ export function createServer(
       res.json({ status: "ok" });
     } catch (err) {
       console.error("[Bridge] Error in sendMessage:", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ---------------------------------------------------------------------------
+  // POST /leave — tell the bridge to leave a group.
+  // ---------------------------------------------------------------------------
+  app.post("/leave", requireToken, (req, res, next) => {
+    const { group_id } = req.body;
+
+    if (!group_id) {
+      return res.status(400).json({ error: "Missing 'group_id'" });
+    }
+
+    if (!isConnectedFn()) {
+      return res.status(503).json({ error: "WhatsApp not connected" });
+    }
+
+    next();
+  });
+
+  app.post("/leave", async (req, res) => {
+    const { group_id } = req.body;
+
+    try {
+      console.log(`[Bridge] Leaving group [${group_id}]`);
+      await client.leaveGroup(group_id);
+      res.json({ status: "ok" });
+    } catch (err) {
+      console.error("[Bridge] Error leaving group:", err);
       res.status(500).json({ error: err.message });
     }
   });

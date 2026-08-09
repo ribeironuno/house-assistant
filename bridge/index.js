@@ -5,6 +5,8 @@
  *   - Maintain a WhatsApp Web session via whatsapp-web.js.
  *   - Forward incoming group messages to the Elixir brain via POST /webhook/whatsapp.
  *   - Expose POST /send so the brain can push replies back to the group.
+ *   - Expose POST /leave so the brain can ask the bridge to leave a group.
+ *   - Detect when the bot is added to a group (group_join) and notify the brain.
  *   - Prevent echo loops: because the bridge and the owner's phone share the same
  *     WhatsApp account, every bot reply also fires a message_create event.
  *     Loop prevention is handled by isBridgeSelfMessage() — see loop-prevention.js.
@@ -12,15 +14,14 @@
  * Environment variables:
  *   PORT              — HTTP port (default: 3000)
  *   ELIXIR_WEBHOOK_URL — Brain webhook URL (default: http://localhost:4000/webhook/whatsapp)
- *   TARGET_GROUP_ID   — WhatsApp group JID to accept messages from (e.g. 120363...@g.us) [required]
- *   BRIDGE_AUTH_TOKEN — Shared secret for /send and /health (empty = no auth, dev only)
+ *   BRIDGE_AUTH_TOKEN — Shared secret for /send, /leave, and /health (empty = no auth, dev only)
  */
 
 import qrcode from "qrcode-terminal";
 import pkg from "whatsapp-web.js";
 
-import { PORT, TARGET_GROUP_ID, BRIDGE_AUTH_TOKEN } from "./src/config.js";
-import { handleIncomingMessage } from "./src/handler.js";
+import { PORT, BRIDGE_AUTH_TOKEN } from "./src/config.js";
+import { handleIncomingMessage, handleGroupJoin } from "./src/handler.js";
 import { createServer } from "./src/server.js";
 
 const { Client, LocalAuth } = pkg;
@@ -75,8 +76,11 @@ client.on("message_create", async (message) => {
   await handleIncomingMessage(client, message);
 });
 
+client.on("group_join", async (notification) => {
+  await handleGroupJoin(client, notification);
+});
+
 const app = createServer(client, () => isConnected, {
-  targetGroupId: TARGET_GROUP_ID,
   authToken: BRIDGE_AUTH_TOKEN,
 });
 

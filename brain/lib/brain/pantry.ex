@@ -3,6 +3,9 @@ defmodule Brain.Pantry do
   Pantry context.
 
   Owns persistence and Portuguese responses for pantry commands.
+
+  Every item is scoped to the WhatsApp group that created it (`group_id`),
+  so each group sees only its own pantry.
   """
 
   import Ecto.Query
@@ -10,12 +13,12 @@ defmodule Brain.Pantry do
   alias Brain.Repo
   alias Brain.Pantry.Item
 
-  def add_many([], _added_by) do
+  def add_many([], _group_id, _added_by) do
     {:reply, "[BOT] Por favor especifica os itens, ex: 'tenho arroz, frango, atum'."}
   end
 
-  def add_many(names, added_by) when is_list(names) do
-    case add_many_models(names, added_by) do
+  def add_many(names, group_id, added_by) when is_list(names) do
+    case add_many_models(names, group_id, added_by) do
       {:ok, items} -> {:reply, format_added_items(items)}
       {:error, _} -> {:reply, "[BOT] Não foi possível adicionar os itens à despensa."}
     end
@@ -25,10 +28,10 @@ defmodule Brain.Pantry do
   Inserts multiple pantry items, returning the inserted structs.
   Rolls back all inserts if any fails. Returns `{:ok, items}` or `{:error, :insert_failed}`.
   """
-  def add_many_models(names, added_by) when is_list(names) do
+  def add_many_models(names, group_id, added_by) when is_list(names) do
     inserted_items =
       Enum.map(names, fn name ->
-        changeset = Item.changeset(%Item{}, %{name: name, added_by: added_by})
+        changeset = Item.changeset(%Item{}, %{name: name, added_by: added_by, group_id: group_id})
         Repo.insert(changeset)
       end)
 
@@ -40,11 +43,11 @@ defmodule Brain.Pantry do
     end
   end
 
-  def remove("") do
+  def remove("", _group_id) do
     {:reply, "[BOT] Por favor especifica o item a remover, ex: 'usei arroz'."}
   end
 
-  def remove(search_term) do
+  def remove(search_term, group_id) do
     cleaned = Brain.Text.strip_leading_articles(search_term)
 
     if cleaned == "" do
@@ -52,7 +55,7 @@ defmodule Brain.Pantry do
     else
       query =
         from(i in Item,
-          where: ilike(i.name, ^"%#{cleaned}%"),
+          where: i.group_id == ^group_id and ilike(i.name, ^"%#{cleaned}%"),
           order_by: [desc: i.inserted_at],
           limit: 1
         )
@@ -68,8 +71,9 @@ defmodule Brain.Pantry do
     end
   end
 
-  def list do
-    items = Repo.all(from(i in Item, order_by: [asc: i.inserted_at]))
+  def list(group_id) do
+    items =
+      Repo.all(from(i in Item, where: i.group_id == ^group_id, order_by: [asc: i.inserted_at]))
 
     if items == [] do
       {:reply, "[BOT] 🏠 A despensa está vazia."}
@@ -78,13 +82,15 @@ defmodule Brain.Pantry do
     end
   end
 
-  def clear do
-    Repo.delete_all(Item)
+  def clear(group_id) do
+    from(i in Item, where: i.group_id == ^group_id)
+    |> Repo.delete_all()
+
     {:reply, "[BOT] 🧹 Despensa limpa."}
   end
 
-  def get_all do
-    Repo.all(from(i in Item, order_by: [asc: i.inserted_at]))
+  def get_all(group_id) do
+    Repo.all(from(i in Item, where: i.group_id == ^group_id, order_by: [asc: i.inserted_at]))
   end
 
   defp rollback_inserted_items(inserted_items) do

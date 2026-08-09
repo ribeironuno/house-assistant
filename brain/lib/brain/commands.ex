@@ -63,35 +63,35 @@ defmodule Brain.Commands do
         Reminders.schedule_from_text(trimmed_raw, sender, group_id)
 
       trimmed_lower in ["lista", "mostrar lista", "ver lista", "list", "show list"] ->
-        ShoppingList.list()
+        ShoppingList.list(group_id)
 
       trimmed_lower in ["limpar", "limpar lista", "clear", "clear list"] ->
-        ShoppingList.clear()
+        ShoppingList.clear(group_id)
 
       String.starts_with?(trimmed_lower, "adicionar") ->
         trimmed_raw
         |> extract_argument("adicionar")
-        |> ShoppingList.add(sender)
+        |> ShoppingList.add(group_id, sender)
 
       String.starts_with?(trimmed_lower, "adiciona") ->
         trimmed_raw
         |> extract_argument("adiciona")
-        |> ShoppingList.add(sender)
+        |> ShoppingList.add(group_id, sender)
 
       String.starts_with?(trimmed_lower, "add") ->
         trimmed_raw
         |> extract_argument("add")
-        |> ShoppingList.add(sender)
+        |> ShoppingList.add(group_id, sender)
 
       String.starts_with?(trimmed_lower, "remover") ->
         trimmed_raw
         |> extract_argument("remover")
-        |> ShoppingList.remove()
+        |> ShoppingList.remove(group_id)
 
       String.starts_with?(trimmed_lower, "remove") ->
         trimmed_raw
         |> extract_argument("remove")
-        |> ShoppingList.remove()
+        |> ShoppingList.remove(group_id)
 
       true and not llm_attempted? ->
         fallback_to_llm(trimmed_raw, sender, group_id)
@@ -104,16 +104,16 @@ defmodule Brain.Commands do
   defp fallback_to_llm(trimmed_raw, sender, group_id) do
     case Brain.LLM.CommandInterpreter.interpret(trimmed_raw) do
       {:ok, {:add_pantry_items, items}} ->
-        Brain.Pantry.add_many(items, sender)
+        Brain.Pantry.add_many(items, group_id, sender)
 
       {:ok, {:remove_pantry_item, item}} ->
-        Brain.Pantry.remove(item)
+        Brain.Pantry.remove(item, group_id)
 
       {:ok, :list_pantry} ->
-        Brain.Pantry.list()
+        Brain.Pantry.list(group_id)
 
       {:ok, :clear_pantry} ->
-        Brain.Pantry.clear()
+        Brain.Pantry.clear(group_id)
 
       {:ok, {:generate_menu, constraints}} ->
         Brain.MenuPlanner.generate(constraints, group_id)

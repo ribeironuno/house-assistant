@@ -38,11 +38,11 @@ defmodule Brain.ShoppingList.InvoiceProcessor do
   @doc """
   Processes an incoming image media object and returns `{:reply, text}` or `:ignore`.
   """
-  def process_media(media, sender \\ nil)
+  def process_media(media, group_id \\ nil, sender \\ nil)
 
-  def process_media(nil, _sender), do: :ignore
+  def process_media(nil, _group_id, _sender), do: :ignore
 
-  def process_media(media, sender) when is_map(media) do
+  def process_media(media, group_id, sender) when is_map(media) do
     if enabled?() do
       case call_vision_provider(media) do
         {:ok, %{"purchased_items" => items}} when is_list(items) ->
@@ -56,7 +56,7 @@ defmodule Brain.ShoppingList.InvoiceProcessor do
             {:reply,
              "[BOT] 🧾 Li a imagem, mas não consegui identificar nenhum produto da fatura."}
           else
-            match_and_remove(clean_items, sender)
+            match_and_remove(clean_items, group_id, sender)
           end
 
         {:error, reason} ->
@@ -96,12 +96,12 @@ defmodule Brain.ShoppingList.InvoiceProcessor do
   WhatsApp reply.  The pantry insert and shopping-list delete are wrapped in a
   single DB transaction so the two writes are always consistent.
   """
-  def match_and_remove(purchased_items, sender \\ nil) do
-    active_items = ShoppingList.get_active_items()
+  def match_and_remove(purchased_items, group_id \\ nil, sender \\ nil) do
+    active_items = ShoppingList.get_active_items(group_id)
     {removed_db_items, unmatched_receipt_items} = find_matches(active_items, purchased_items)
 
     Repo.transaction(fn ->
-      pantry_added = add_to_pantry(purchased_items, sender)
+      pantry_added = add_to_pantry(purchased_items, group_id, sender)
 
       if removed_db_items != [] do
         ShoppingList.delete_items(removed_db_items)
@@ -165,9 +165,9 @@ defmodule Brain.ShoppingList.InvoiceProcessor do
   Adds purchased items to the pantry, skipping items that are already there
   (compared case-insensitively). Returns the list of inserted pantry items.
   """
-  def add_to_pantry(purchased_items, sender) do
+  def add_to_pantry(purchased_items, group_id, sender) do
     existing_names =
-      Pantry.get_all()
+      Pantry.get_all(group_id)
       |> Enum.map(&normalize(&1.name))
 
     new_items =
@@ -175,7 +175,7 @@ defmodule Brain.ShoppingList.InvoiceProcessor do
         normalize(item) in existing_names
       end)
 
-    case Pantry.add_many_models(new_items, sender) do
+    case Pantry.add_many_models(new_items, group_id, sender) do
       {:ok, inserted} -> inserted
       {:error, _} -> []
     end
