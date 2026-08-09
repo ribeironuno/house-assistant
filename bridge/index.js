@@ -15,6 +15,7 @@
  *   PORT              — HTTP port (default: 3000)
  *   ELIXIR_WEBHOOK_URL — Brain webhook URL (default: http://localhost:4000/webhook/whatsapp)
  *   BRIDGE_AUTH_TOKEN — Shared secret for /send, /leave, and /health (empty = no auth, dev only)
+ *   WEBHOOK_SECRET    — Shared secret forwarded as x-webhook-token to the brain webhook
  */
 
 import qrcode from "qrcode-terminal";

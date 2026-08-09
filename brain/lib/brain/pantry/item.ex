@@ -23,7 +23,7 @@ defmodule Brain.Pantry.Item do
   def changeset(pantry_item, attrs) do
     pantry_item
     |> cast(attrs, [:name, :added_by, :group_id])
-    |> validate_required([:name])
+    |> validate_required([:name, :group_id])
     |> validate_length(:name, max: 255)
     |> update_change(:name, &String.trim/1)
   end

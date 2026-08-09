@@ -22,7 +22,7 @@ defmodule Brain.CommandsPantryMenuIntegrationTest do
       end
     end
 
-    def generate_menu(system_prompt, _user, _schema) do
+    def generate_menu(_system_prompt, _user, _schema) do
       menu_reply()
     end
 

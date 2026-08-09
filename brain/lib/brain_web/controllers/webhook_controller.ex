@@ -27,9 +27,14 @@ defmodule BrainWeb.WebhookController do
   """
 
   @doc """
-  Handles a `group_join` event: the bot was added to a group, so it introduces
-  itself and asks the group to reply "sim" or "não".
+  Entry point for bridge webhook events.
+
+  Handles `group_join` events (bot added to a group), incoming messages with
+  media (invoices/receipts), and plain text messages. Malformed payloads that
+  don't match the expected shape are ignored.
   """
+  def create(conn, params)
+
   def create(conn, %{"event" => "group_join", "group_id" => group_id}) do
     Logger.info("[Brain] Bot added to group #{group_id}")
 
@@ -41,15 +46,11 @@ defmodule BrainWeb.WebhookController do
     json(conn, %{status: "ok"})
   end
 
-  @doc """
-  Handles an incoming message with media (invoices/receipts).
-  """
   def create(
         conn,
         %{"group_id" => group_id, "sender" => sender, "media" => %{"data" => _data} = media} =
           params
-      )
-      when not is_nil(media) do
+      ) do
     text = Map.get(params, "text", "")
 
     case Groups.handle_message(group_id, text, sender) do
@@ -75,6 +76,7 @@ defmodule BrainWeb.WebhookController do
 
       {:leave, reply_text} ->
         BridgeClient.send_message(group_id, reply_text)
+        Process.sleep(1500)
         Groups.request_leave(group_id)
 
       :ignore ->
@@ -115,6 +117,7 @@ defmodule BrainWeb.WebhookController do
 
       {:leave, reply_text} ->
         BridgeClient.send_message(group_id, reply_text)
+        Process.sleep(1500)
         Groups.request_leave(group_id)
 
       :ignore ->

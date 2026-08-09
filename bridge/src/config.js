@@ -4,3 +4,5 @@ export const ELIXIR_WEBHOOK_URL =
   process.env.ELIXIR_WEBHOOK_URL || "http://localhost:4000/webhook/whatsapp";
 
 export const BRIDGE_AUTH_TOKEN = process.env.BRIDGE_AUTH_TOKEN?.trim() || "";
+
+export const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET?.trim() || "";

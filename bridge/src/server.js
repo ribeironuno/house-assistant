@@ -61,8 +61,8 @@ export function createServer(client, isConnectedFn, { authToken }) {
   app.post("/send", requireToken, (req, res, next) => {
     const { to, text } = req.body;
 
-    if (!to || typeof text !== "string" || !text) {
-      return res.status(400).json({ error: "Missing 'to' or 'text'" });
+    if (!to || !to.endsWith("@g.us") || typeof text !== "string" || !text) {
+      return res.status(400).json({ error: "Missing or invalid 'to' or 'text'" });
     }
 
     if (!isConnectedFn()) {
@@ -89,26 +89,21 @@ export function createServer(client, isConnectedFn, { authToken }) {
   // ---------------------------------------------------------------------------
   // POST /leave — tell the bridge to leave a group.
   // ---------------------------------------------------------------------------
-  app.post("/leave", requireToken, (req, res, next) => {
+  app.post("/leave", requireToken, async (req, res) => {
     const { group_id } = req.body;
 
-    if (!group_id) {
-      return res.status(400).json({ error: "Missing 'group_id'" });
+    if (!group_id || !group_id.endsWith("@g.us")) {
+      return res.status(400).json({ error: "Missing or invalid 'group_id'" });
     }
 
     if (!isConnectedFn()) {
       return res.status(503).json({ error: "WhatsApp not connected" });
     }
 
-    next();
-  });
-
-  app.post("/leave", async (req, res) => {
-    const { group_id } = req.body;
-
     try {
       console.log(`[Bridge] Leaving group [${group_id}]`);
-      await client.leaveGroup(group_id);
+      const chat = await client.getChatById(group_id);
+      await chat.leave();
       res.json({ status: "ok" });
     } catch (err) {
       console.error("[Bridge] Error leaving group:", err);

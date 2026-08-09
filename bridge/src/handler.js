@@ -1,5 +1,17 @@
-import { ELIXIR_WEBHOOK_URL } from "./config.js";
+import { ELIXIR_WEBHOOK_URL, WEBHOOK_SECRET } from "./config.js";
 import { isBridgeSelfMessage } from "./loop-prevention.js";
+
+/**
+ * Headers for brain webhook POSTs. When a WEBHOOK_SECRET is configured the
+ * brain requires it (see brain/lib/brain_web/router.ex verify_webhook_token).
+ */
+function webhookHeaders() {
+  const headers = { "Content-Type": "application/json" };
+  if (WEBHOOK_SECRET) {
+    headers["x-webhook-token"] = WEBHOOK_SECRET;
+  }
+  return headers;
+}
 
 /**
  * Handles every message_create event from WhatsApp.
@@ -68,7 +80,7 @@ export async function handleIncomingMessage(client, message) {
   try {
     const response = await fetch(ELIXIR_WEBHOOK_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: webhookHeaders(),
       body: JSON.stringify({
         group_id: groupId,
         sender: message.author ?? message.from,
@@ -118,7 +130,7 @@ export async function handleGroupJoin(client, notification) {
   try {
     const response = await fetch(ELIXIR_WEBHOOK_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: webhookHeaders(),
       body: JSON.stringify({
         event: "group_join",
         group_id: groupId,

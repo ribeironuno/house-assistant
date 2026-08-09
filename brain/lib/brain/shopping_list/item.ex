@@ -30,7 +30,7 @@ defmodule Brain.ShoppingList.Item do
   def changeset(shopping_item, attrs) do
     shopping_item
     |> cast(attrs, [:name, :added_by, :group_id, :done])
-    |> validate_required([:name])
+    |> validate_required([:name, :group_id])
     |> validate_length(:name, max: 255)
     |> update_change(:name, &String.trim/1)
   end

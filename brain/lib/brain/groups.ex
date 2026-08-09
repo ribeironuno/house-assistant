@@ -1,4 +1,6 @@
 defmodule Brain.Groups do
+  require Logger
+
   @moduledoc """
   Multi-group (multi-tenant) activation context.
 
@@ -123,9 +125,20 @@ defmodule Brain.Groups do
   end
 
   @positive ~w(sim s y yes quero ok okay claro)
-  @positive_prefixes ["sim,", "s,", "sim!", "quero sim", "pode ser"]
+  @positive_prefixes ["sim,", "s,", "sim!", "quero sim", "pode ser", "sim quero"]
   @negative ~w(não nao n no nop nope)
-  @negative_prefixes ["não,", "nao,", "não.", "nao.", "não obrigado", "nao obrigado"]
+  @negative_prefixes [
+    "não,",
+    "nao,",
+    "não.",
+    "nao.",
+    "não quero",
+    "nao quero",
+    "não vou",
+    "nao vou",
+    "não obrigado",
+    "nao obrigado"
+  ]
 
   defp positive_answer?(norm) do
     norm in @positive or Enum.any?(@positive_prefixes, &String.starts_with?(norm, &1))
@@ -140,6 +153,7 @@ defmodule Brain.Groups do
     |> String.downcase()
     |> String.trim()
     |> String.replace(~r/[\s]+/, " ")
+    |> String.replace(~r/[.!?,…]+$/, "")
   end
 
   @doc "Registers a group as pending (idempotent)."
@@ -170,20 +184,31 @@ defmodule Brain.Groups do
   end
 
   defp insert_or_update(group_id, status) do
-    case get_group(group_id) do
-      nil ->
-        Repo.insert(%Group{group_id: group_id, status: status},
-          on_conflict: [set: [status: status]],
-          conflict_target: :group_id
+    result =
+      case get_group(group_id) do
+        nil ->
+          Repo.insert(%Group{group_id: group_id, status: status},
+            on_conflict: [set: [status: status]],
+            conflict_target: :group_id
+          )
+
+        %Group{} = group ->
+          group
+          |> Group.changeset(%{status: status})
+          |> Repo.update()
+      end
+
+    case result do
+      {:ok, _} ->
+        :ok
+
+      {:error, reason} ->
+        Logger.error(
+          "[Brain] Failed to update group #{group_id} to #{status}: #{inspect(reason)}"
         )
 
-      %Group{} = group ->
-        group
-        |> Group.changeset(%{status: status})
-        |> Repo.update()
+        :ok
     end
-
-    :ok
   end
 
   defp get_group(group_id) do

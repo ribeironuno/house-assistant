@@ -52,7 +52,7 @@ defmodule Brain.ShoppingList.InvoiceProcessorTest do
 
     purchased_items = ["leite"]
 
-    assert {:reply, reply} = InvoiceProcessor.match_and_remove(purchased_items, @group_id)
+    assert {:reply, _reply} = InvoiceProcessor.match_and_remove(purchased_items, @group_id)
 
     remaining = Repo.all(Item)
     assert length(remaining) == 2

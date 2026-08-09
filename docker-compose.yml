@@ -16,10 +16,12 @@ services:
     build: ./bridge
     container_name: whatsapp_bridge
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     environment:
       - PORT=3000
       - ELIXIR_WEBHOOK_URL=${ELIXIR_WEBHOOK_URL:-http://brain:4000/webhook/whatsapp}
+      - BRIDGE_AUTH_TOKEN=${BRIDGE_AUTH_TOKEN:-}
+      - WEBHOOK_SECRET=${WEBHOOK_SECRET:-}
     volumes:
       - baileys_auth:/app/.wwebjs_auth
     restart: unless-stopped
@@ -28,11 +30,13 @@ services:
     build: ./brain
     container_name: whatsapp_brain
     ports:
-      - "4000:4000"
+      - "127.0.0.1:4000:4000"
     environment:
       - PORT=4000
       - BRIDGE_SEND_URL=${BRIDGE_SEND_URL:-http://bridge:3000/send}
       - BRIDGE_LEAVE_URL=${BRIDGE_LEAVE_URL:-http://bridge:3000/leave}
+      - BRIDGE_AUTH_TOKEN=${BRIDGE_AUTH_TOKEN:-}
+      - WEBHOOK_SECRET=${WEBHOOK_SECRET:-}
       - DATABASE_URL=ecto://postgres:postgres@db:5432/house_assistant_dev
       - PHX_SERVER=true
     depends_on:
