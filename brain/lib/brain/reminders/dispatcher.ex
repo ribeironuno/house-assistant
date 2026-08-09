@@ -53,7 +53,7 @@ defmodule Brain.Reminders.Dispatcher do
         |> Repo.update()
 
       {:error, reason} ->
-        Logger.error("[Brain] Falha ao enviar lembrete #{reminder.id}: #{inspect(reason)}")
+        Logger.error("[Brain] Failed to send reminder #{reminder.id}: #{inspect(reason)}")
     end
   end
 

@@ -35,7 +35,7 @@ defmodule BrainWeb.WebhookController do
       json(conn, %{status: "ignored"})
     else
       Logger.info(
-        "[Brain] Media recebido no grupo #{group_id} de #{sender} (#{Map.get(media, "mimetype")})"
+        "[Brain] Received media in group #{group_id} from #{sender} (#{Map.get(media, "mimetype")})"
       )
 
       result = Brain.ShoppingList.InvoiceProcessor.process_media(media, sender)
@@ -66,7 +66,9 @@ defmodule BrainWeb.WebhookController do
     if rejected_group?(group_id) do
       json(conn, %{status: "ignored"})
     else
-      Logger.info("[Brain] Mensagem recebida no grupo #{group_id} de #{sender}: #{inspect(text)}")
+      Logger.info(
+        "[Brain] Received message in group #{group_id} from #{sender}: #{inspect(text)}"
+      )
 
       case Brain.Commands.handle(text, sender, group_id) do
         {:reply, reply_text} ->
@@ -82,7 +84,7 @@ defmodule BrainWeb.WebhookController do
 
   # Fallback: catches malformed payloads that don't match the expected shape.
   def create(conn, params) do
-    Logger.warning("[Brain] Payload do webhook com estrutura inesperada: #{inspect(params)}")
+    Logger.warning("[Brain] Webhook payload with unexpected structure: #{inspect(params)}")
     json(conn, %{status: "ignored"})
   end
 

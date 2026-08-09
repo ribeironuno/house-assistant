@@ -11,7 +11,7 @@ defmodule Brain.WhatsApp.BridgeClient do
   def send_message(group_id, text) do
     if Application.get_env(:brain, :send_outgoing_messages, true) == false do
       Logger.info(
-        "[Brain] Envio de mensagem desativado por configuração: #{inspect(%{to: group_id, text: text})}"
+        "[Brain] Outgoing messages disabled by config: #{inspect(%{to: group_id, text: text})}"
       )
 
       :ok
@@ -24,9 +24,7 @@ defmodule Brain.WhatsApp.BridgeClient do
     bridge_url = bridge_send_url()
     auth_token = Application.get_env(:brain, :bridge_auth_token)
 
-    Logger.info(
-      "[Brain] A enviar mensagem '#{text}' para o grupo [#{group_id}] via #{bridge_url}"
-    )
+    Logger.info("[Brain] Sending message '#{text}' to group [#{group_id}] via #{bridge_url}")
 
     headers =
       if auth_token && auth_token != "" do
@@ -42,16 +40,16 @@ defmodule Brain.WhatsApp.BridgeClient do
            receive_timeout: 15_000
          ) do
       {:ok, %Req.Response{status: 200}} ->
-        Logger.info("[Brain] Mensagem confirmada pela ponte (Bridge)")
+        Logger.info("[Brain] Message confirmed by the Bridge")
         :ok
 
       {:ok, %Req.Response{status: status, body: body}} ->
-        Logger.error("[Brain] Ponte (Bridge) respondeu com HTTP #{status}: #{inspect(body)}")
+        Logger.error("[Brain] Bridge responded with HTTP #{status}: #{inspect(body)}")
         {:error, {:http_error, status, body}}
 
       {:error, exception} ->
         Logger.error(
-          "[Brain] Falha ao comunicar com o endpoint da ponte (Bridge): #{inspect(exception)}"
+          "[Brain] Failed to communicate with the Bridge endpoint: #{inspect(exception)}"
         )
 
         {:error, exception}
