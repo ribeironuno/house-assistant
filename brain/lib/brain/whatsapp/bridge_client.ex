@@ -16,7 +16,7 @@ defmodule Brain.WhatsApp.BridgeClient do
 
       :ok
     else
-      do_post(bridge_send_url(), %{to: group_id, text: text})
+      do_post(bridge_url("send"), %{to: group_id, text: text})
     end
   end
 
@@ -28,7 +28,7 @@ defmodule Brain.WhatsApp.BridgeClient do
       Logger.info("[Brain] Outgoing messages disabled by config: leave group #{group_id}")
       :ok
     else
-      do_post(bridge_leave_url(), %{group_id: group_id})
+      do_post(bridge_url("leave"), %{group_id: group_id})
     end
   end
 
@@ -67,21 +67,14 @@ defmodule Brain.WhatsApp.BridgeClient do
     end
   end
 
-  defp bridge_send_url do
+  defp bridge_url(endpoint) do
+    env_key = if endpoint == "send", do: "BRIDGE_SEND_URL", else: "BRIDGE_LEAVE_URL"
+
     default_bridge_url =
       if System.get_env("PHX_SERVER") == "true",
-        do: "http://bridge:3000/send",
-        else: "http://localhost:3000/send"
+        do: "http://bridge:3000/#{endpoint}",
+        else: "http://localhost:3000/#{endpoint}"
 
-    System.get_env("BRIDGE_SEND_URL", default_bridge_url)
-  end
-
-  defp bridge_leave_url do
-    default_bridge_url =
-      if System.get_env("PHX_SERVER") == "true",
-        do: "http://bridge:3000/leave",
-        else: "http://localhost:3000/leave"
-
-    System.get_env("BRIDGE_LEAVE_URL", default_bridge_url)
+    System.get_env(env_key, default_bridge_url)
   end
 end

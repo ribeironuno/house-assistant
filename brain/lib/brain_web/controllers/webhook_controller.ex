@@ -53,41 +53,38 @@ defmodule BrainWeb.WebhookController do
       ) do
     text = Map.get(params, "text", "")
 
-    case Groups.handle_message(group_id, text, sender) do
-      :proceed ->
-        Logger.info(
-          "[Brain] Received media in group #{group_id} from #{sender} (#{Map.get(media, "mimetype")})"
-        )
+    with_group_gating(group_id, text, sender, fn ->
+      Logger.info(
+        "[Brain] Received media in group #{group_id} from #{sender} (#{Map.get(media, "mimetype")})"
+      )
 
-        result = Brain.ShoppingList.InvoiceProcessor.process_media(media, group_id, sender)
+      case Brain.ShoppingList.InvoiceProcessor.process_media(media, group_id, sender) do
+        {:reply, reply_text} ->
+          BridgeClient.send_message(group_id, reply_text)
 
-        case result do
-          {:reply, reply_text} ->
-            BridgeClient.send_message(group_id, reply_text)
-
-          :ignore ->
-            if text != "" do
-              dispatch_text(group_id, text, sender)
+        :ignore ->
+          if text != "" do
+            case Brain.Commands.handle(text, sender, group_id) do
+              {:reply, reply_text} -> BridgeClient.send_message(group_id, reply_text)
+              :ignore -> :ok
             end
-        end
-
-      {:reply, reply_text} ->
-        BridgeClient.send_message(group_id, reply_text)
-
-      {:leave, reply_text} ->
-        BridgeClient.send_message(group_id, reply_text)
-        Process.sleep(1500)
-        Groups.request_leave(group_id)
-
-      :ignore ->
-        :ok
-    end
+          end
+      end
+    end)
 
     json(conn, %{status: "ok"})
   end
 
   def create(conn, %{"group_id" => group_id, "sender" => sender, "text" => text}) do
-    dispatch_text(group_id, text, sender)
+    with_group_gating(group_id, text, sender, fn ->
+      Logger.info("[Brain] Received message in group #{group_id} from #{sender}: #{inspect(text)}")
+
+      case Brain.Commands.handle(text, sender, group_id) do
+        {:reply, reply_text} -> BridgeClient.send_message(group_id, reply_text)
+        :ignore -> :ok
+      end
+    end)
+
     json(conn, %{status: "ok"})
   end
 
@@ -97,20 +94,10 @@ defmodule BrainWeb.WebhookController do
     json(conn, %{status: "ignored"})
   end
 
-  defp dispatch_text(group_id, text, sender) do
+  defp with_group_gating(group_id, text, sender, callback) do
     case Groups.handle_message(group_id, text, sender) do
       :proceed ->
-        Logger.info(
-          "[Brain] Received message in group #{group_id} from #{sender}: #{inspect(text)}"
-        )
-
-        case Brain.Commands.handle(text, sender, group_id) do
-          {:reply, reply_text} ->
-            BridgeClient.send_message(group_id, reply_text)
-
-          :ignore ->
-            :ok
-        end
+        callback.()
 
       {:reply, reply_text} ->
         BridgeClient.send_message(group_id, reply_text)
