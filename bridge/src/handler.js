@@ -1,6 +1,14 @@
 import { ELIXIR_WEBHOOK_URL, WEBHOOK_SECRET } from "./config.js";
 import { isBridgeSelfMessage } from "./loop-prevention.js";
 
+// Phoenix's default 8 MB body limit — stay comfortably below it for base64 media.
+export const MAX_MEDIA_BASE64 = 5_500_000; // ~4 MB original image
+
+const WEBHOOK_MAX_RETRIES = 3;
+const WEBHOOK_RETRY_DELAY_MS = 1_000;
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 /**
  * Headers for brain webhook POSTs. When a WEBHOOK_SECRET is configured the
  * brain requires it (see brain/lib/brain_web/router.ex verify_webhook_token).
@@ -11,6 +19,52 @@ function webhookHeaders() {
     headers["x-webhook-token"] = WEBHOOK_SECRET;
   }
   return headers;
+}
+
+/**
+ * POSTs a payload to the brain webhook with retries. Returns the response on
+ * success, or null when every attempt fails.
+ */
+async function postToBrain(payload) {
+  for (let attempt = 1; attempt <= WEBHOOK_MAX_RETRIES; attempt++) {
+    try {
+      const response = await fetch(ELIXIR_WEBHOOK_URL, {
+        method: "POST",
+        headers: webhookHeaders(),
+        body: JSON.stringify(payload),
+      });
+
+      if (response.ok) {
+        return response;
+      }
+
+      console.error(
+        `[Bridge] Webhook returned HTTP ${response.status} (attempt ${attempt}/${WEBHOOK_MAX_RETRIES})`,
+      );
+    } catch (err) {
+      console.error(
+        `[Bridge] Failed to send webhook to Elixir brain (attempt ${attempt}/${WEBHOOK_MAX_RETRIES}):`,
+        err.message,
+      );
+    }
+
+    if (attempt < WEBHOOK_MAX_RETRIES) {
+      await sleep(WEBHOOK_RETRY_DELAY_MS * attempt);
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Sends a direct feedback message to a group, ignoring failures (best effort).
+ */
+async function sendGroupReply(client, groupId, text) {
+  try {
+    await client.sendMessage(groupId, text);
+  } catch (err) {
+    console.error("[Bridge] Failed to send feedback message:", err.message);
+  }
 }
 
 /**
@@ -53,6 +107,20 @@ export async function handleIncomingMessage(client, message) {
       const messageMedia = await message.downloadMedia();
 
       if (messageMedia && messageMedia.data) {
+        if (messageMedia.data.length > MAX_MEDIA_BASE64) {
+          console.warn(
+            `[Bridge] Media too large (${messageMedia.data.length} base64 chars), skipping download for message:`,
+            message.id?.id,
+          );
+
+          await sendGroupReply(
+            client,
+            groupId,
+            "[BOT] 📷 A imagem é demasiado grande para processar (máx. ~4 MB). Envia uma foto mais pequena.",
+          );
+          return;
+        }
+
         mediaData = {
           mimetype: messageMedia.mimetype,
           data: messageMedia.data, // already base64-encoded by whatsapp-web.js
@@ -80,27 +148,20 @@ export async function handleIncomingMessage(client, message) {
     hasMedia: !!mediaData,
   });
 
-  try {
-    const response = await fetch(ELIXIR_WEBHOOK_URL, {
-      method: "POST",
-      headers: webhookHeaders(),
-      body: JSON.stringify({
-        group_id: groupId,
-        sender: message.author ?? message.from,
-        text: message.body || "",
-        media: mediaData,
-        from_me: message.fromMe,
-        timestamp: message.timestamp,
-      }),
-    });
+  const response = await postToBrain({
+    group_id: groupId,
+    sender: message.author ?? message.from,
+    text: message.body || "",
+    media: mediaData,
+    from_me: message.fromMe,
+    timestamp: message.timestamp,
+  });
 
-    if (!response.ok) {
-      console.error(`[Bridge] Webhook returned HTTP ${response.status}`);
-    }
-  } catch (err) {
-    console.error(
-      "[Bridge] Failed to send webhook to Elixir brain:",
-      err.message,
+  if (!response) {
+    await sendGroupReply(
+      client,
+      groupId,
+      "[BOT] 😕 Não consegui processar a tua mensagem agora. Tenta novamente daqui a pouco.",
     );
   }
 }

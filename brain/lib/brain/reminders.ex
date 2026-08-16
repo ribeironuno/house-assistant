@@ -40,6 +40,12 @@ defmodule Brain.Reminders do
 
       {:error, :missing_time} ->
         {:reply, "[BOT] Por favor diz quando queres o lembrete, ex: 'logo' ou 'daqui a 3 dias'."}
+
+      {:error, :duration_too_long} ->
+        {:reply, "[BOT] 😕 Esse prazo é demasiado longo. O máximo são 10 anos."}
+
+      {:error, :invalid_hour} ->
+        {:reply, "[BOT] 😕 Essa hora não é válida. Usa um horário entre 0h e 23h."}
     end
   end
 
@@ -52,6 +58,8 @@ defmodule Brain.Reminders do
     )
     |> String.trim()
   end
+
+  @max_duration_seconds 3650 * 24 * 60 * 60
 
   defp parse("", _now), do: {:error, :missing_text}
 
@@ -78,42 +86,63 @@ defmodule Brain.Reminders do
           ) ->
         [phrase, amount_text, unit] = match
         reminder_text = remove_time_phrase(body, phrase)
+        amount = String.to_integer(amount_text)
+        seconds = duration_in_seconds(amount, unit)
 
-        remind_at =
-          DateTime.add(now, duration_in_seconds(String.to_integer(amount_text), unit), :second)
+        if seconds > @max_duration_seconds do
+          {:error, :duration_too_long}
+        else
+          remind_at = DateTime.add(now, seconds, :second)
+          validate_text(reminder_text, remind_at)
+        end
 
-        validate_text(reminder_text, remind_at)
-
-      # "amanhã às 9h" / "amanhã às 18:00" — tomorrow at a specific time
-      match = Regex.run(~r/\bamanh[ãa]\s+[àa]s\s+(\d{1,2})(?:h|:00)?\b/iu, body) ->
-        [phrase, hour_str] = match
+      # "amanhã às 9h" / "amanhã às 18:00" / "amanhã às 18:30" — tomorrow at a specific time
+      match = Regex.run(~r/\bamanh[ãa]\s+[àa]s\s+(\d{1,2})(?::(\d{2})|h)?\b/iu, body) ->
+        phrase = Enum.at(match, 0)
+        hour_str = Enum.at(match, 1)
+        minute_str = Enum.at(match, 2)
         reminder_text = remove_time_phrase(body, phrase)
         hour = String.to_integer(hour_str)
-        remind_at = next_clock_time(now, hour, days_ahead: 1)
-        validate_text(reminder_text, remind_at)
+        minute = if(minute_str, do: String.to_integer(minute_str), else: 0)
 
-      # "à sexta" / "à segunda" / "à terça às 18h" etc. — next weekday (optionally with time)
+        with :ok <- validate_hour(hour) do
+          remind_at = next_clock_time(now, hour, minute, days_ahead: 1)
+          validate_text(reminder_text, remind_at)
+        end
+
+      # "à sexta" / "à segunda" / "à terça às 18h" / "à terça às 18:30" etc.
       match =
           Regex.run(
-            ~r/\b[àa]\s+(segunda|terça|terca|quarta|quinta|sexta|sábado|sabado|domingo)(?:\s+[àa]s\s+(\d{1,2})(?:h|:00)?)?\b/iu,
+            ~r/\b[àa]\s+(segunda|terça|terca|quarta|quinta|sexta|sábado|sabado|domingo)(?:\s+[àa]s\s+(\d{1,2})(?::(\d{2})|h)?)?\b/iu,
             body
           ) ->
         weekday_name = Enum.at(match, 1)
         time_str = Enum.at(match, 2)
+        minute_str = Enum.at(match, 3)
         phrase = Enum.at(match, 0)
         reminder_text = remove_time_phrase(body, phrase)
         weekday_num = @weekday_map[String.downcase(weekday_name)]
         hour = if time_str, do: String.to_integer(time_str), else: @default_weekday_hour
-        remind_at = next_weekday(now, weekday_num, hour)
-        validate_text(reminder_text, remind_at)
+        minute = if(minute_str, do: String.to_integer(minute_str), else: 0)
 
-      # "às 18h" / "às 18:00" / "às 9h" — today (or tomorrow if already past)
-      match = Regex.run(~r/\b[àa]s\s+(\d{1,2})(?:h|:00)\b/iu, body) ->
-        [phrase, hour_str] = match
+        with :ok <- validate_hour(hour) do
+          remind_at = next_weekday(now, weekday_num, hour, minute)
+          validate_text(reminder_text, remind_at)
+        end
+
+      # "às 18h" / "às 18:00" / "às 18:30" / "às 9h" — today (or tomorrow if already past)
+      match = Regex.run(~r/\b[àa]s\s+(\d{1,2})(?::(\d{2})|h)\b/iu, body) ->
+        phrase = Enum.at(match, 0)
+        hour_str = Enum.at(match, 1)
+        minute_str = Enum.at(match, 2)
         reminder_text = remove_time_phrase(body, phrase)
         hour = String.to_integer(hour_str)
-        remind_at = next_clock_time(now, hour, days_ahead: 0)
-        validate_text(reminder_text, remind_at)
+        minute = if(minute_str, do: String.to_integer(minute_str), else: 0)
+
+        with :ok <- validate_hour(hour) do
+          remind_at = next_clock_time(now, hour, minute, days_ahead: 0)
+          validate_text(reminder_text, remind_at)
+        end
 
       Regex.match?(~r/\blogo\b/iu, body) ->
         reminder_text = remove_time_phrase(body, ~r/\blogo\b/iu)
@@ -139,8 +168,11 @@ defmodule Brain.Reminders do
     end
   end
 
+  defp validate_hour(hour) when hour in 0..23, do: :ok
+  defp validate_hour(_hour), do: {:error, :invalid_hour}
+
   @doc false
-  defp next_weekday(now, target_day, hour) do
+  defp next_weekday(now, target_day, hour, minute) do
     now_lisbon = DateTime.shift_zone!(now, @lisbon_tz)
     current_dow = Date.day_of_week(now_lisbon)
 
@@ -151,12 +183,12 @@ defmodule Brain.Reminders do
 
     next_date = Date.add(DateTime.to_date(now_lisbon), days_ahead)
 
-    DateTime.new!(next_date, Time.new!(hour, 0, 0), @lisbon_tz)
+    DateTime.new!(next_date, Time.new!(hour, minute, 0), @lisbon_tz)
     |> DateTime.shift_zone!("Etc/UTC")
   end
 
   @doc false
-  defp next_clock_time(now, hour, opts) do
+  defp next_clock_time(now, hour, minute, opts) do
     days_ahead = opts[:days_ahead] || 0
     now_lisbon = DateTime.shift_zone!(now, @lisbon_tz)
     now_hour = now_lisbon.hour
@@ -169,7 +201,7 @@ defmodule Brain.Reminders do
         target_date
       end
 
-    DateTime.new!(target_date, Time.new!(hour, 0, 0), @lisbon_tz)
+    DateTime.new!(target_date, Time.new!(hour, minute, 0), @lisbon_tz)
     |> DateTime.shift_zone!("Etc/UTC")
   end
 

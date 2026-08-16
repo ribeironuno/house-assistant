@@ -174,12 +174,15 @@ defmodule Brain.Commands do
       else
         scopes =
           []
-          |> maybe_add_scope(String.contains?(trimmed_lower, "compras"), :shopping)
+          |> maybe_add_scope(
+            String.contains?(trimmed_lower, "compras") or
+              String.contains?(trimmed_lower, "lista"),
+            :shopping
+          )
           |> maybe_add_scope(String.contains?(trimmed_lower, "despensa"), :pantry)
           |> maybe_add_scope(String.contains?(trimmed_lower, "lembrete"), :reminders)
 
-        # Bare "limpar" / "clear" without a scope defaults to the shopping list.
-        if scopes == [], do: [:shopping], else: scopes
+        scopes
       end
     else
       []

@@ -175,6 +175,16 @@ defmodule Brain.CommandsTest do
     assert Enum.map(Repo.all(Item), & &1.name) == ["pão"]
   end
 
+  test "ambiguous clear phrases do not delete data (LLM decides)" do
+    Commands.handle("adiciona leite", "user_1", @group_id)
+
+    assert :ignore = Commands.handle("apaga a luz", "user_1", @group_id)
+    assert :ignore = Commands.handle("limpa aí", "user_1", @group_id)
+    assert :ignore = Commands.handle("limpar", "user_1", @group_id)
+
+    assert Enum.map(Repo.all(Item), & &1.name) == ["leite"]
+  end
+
   test "ajuda command lists known commands" do
     assert {:reply, reply} = Commands.handle("ajuda", "user_1", @group_id)
 
@@ -267,6 +277,49 @@ defmodule Brain.CommandsTest do
     [reminder] = Repo.all(Reminder)
     remind_lisbon = reminder.remind_at |> DateTime.shift_zone!("Europe/Lisbon")
     assert remind_lisbon.hour == 9
+  end
+
+  test "lembrar de command supports amanhã às HH:MM" do
+    assert {:reply, reply} =
+             Commands.handle("lembrar de pagar a luz amanhã às 18:30", "user_1", "group_1")
+
+    assert reply =~ "[BOT] 🔔 Lembrete guardado!"
+    assert reply =~ "Título: pagar a luz"
+
+    [reminder] = Repo.all(Reminder)
+    remind_lisbon = reminder.remind_at |> DateTime.shift_zone!("Europe/Lisbon")
+    assert remind_lisbon.hour == 18
+    assert remind_lisbon.minute == 30
+  end
+
+  test "lembrar de command supports à sexta às HH:MM" do
+    assert {:reply, reply} =
+             Commands.handle("lembrar de ligar à avó à sexta às 14:45", "user_1", "group_1")
+
+    assert reply =~ "[BOT] 🔔 Lembrete guardado!"
+
+    [reminder] = Repo.all(Reminder)
+    remind_lisbon = reminder.remind_at |> DateTime.shift_zone!("Europe/Lisbon")
+    assert remind_lisbon.hour == 14
+    assert remind_lisbon.minute == 45
+  end
+
+  test "lembrar de command rejects invalid hour" do
+    assert {:reply, "[BOT] 😕 Essa hora não é válida. Usa um horário entre 0h e 23h."} =
+             Commands.handle("lembrar de pagar a luz às 25h", "user_1", "group_1")
+
+    assert Repo.all(Reminder) == []
+  end
+
+  test "lembrar de command rejects absurdly long durations" do
+    assert {:reply, "[BOT] 😕 Esse prazo é demasiado longo. O máximo são 10 anos."} =
+             Commands.handle(
+               "lembrar de pagar a luz daqui a 999999999999 dias",
+               "user_1",
+               "group_1"
+             )
+
+    assert Repo.all(Reminder) == []
   end
 
   test "unrecognized messages and bot response prefixes are ignored" do

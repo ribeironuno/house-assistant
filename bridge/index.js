@@ -69,8 +69,16 @@ client.on("ready", async () => {
 });
 
 client.on("disconnected", (reason) => {
-  console.log("[Bridge] Disconnected:", reason);
+  console.error(
+    `[Bridge] Disconnected from WhatsApp: ${reason}. The bot is now offline — no messages are being processed.`,
+  );
   isConnected = false;
+
+  // whatsapp-web.js cannot re-initialize a disconnected client. Exit so the
+  // process manager (Docker restart: unless-stopped) brings it back with a
+  // fresh session.
+  console.error("[Bridge] Restarting in 5 seconds to recover the WhatsApp session...");
+  setTimeout(() => process.exit(1), 5_000);
 });
 
 client.on("message_create", async (message) => {

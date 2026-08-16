@@ -160,7 +160,12 @@ group when it's time.
 | `amanhã` | Tomorrow at 10:00 |
 | `amanhã de manhã` | Tomorrow at 09:00 |
 | `à sexta` | Next Friday at 10:00 |
+| `à sexta às 18:30` | Next Friday at 18:30 |
 | `às 18h` | Today (or next occurrence) at 18:00 |
+| `às 18:30` | Today (or next occurrence) at 18:30 |
+
+Hours are validated (0–23); invalid times and durations beyond 10 years are rejected
+with a friendly message.
 
 ### Clearing reminders
 
