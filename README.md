@@ -143,6 +143,7 @@ Due reminders are posted back to the group as `[BOT] 🔔 Lembrete: <tarefa>`.
 | `usei <item>` | `usei o arroz` | Removes from pantry |
 | `o que tenho na despensa?` | `o que tenho na despensa?` | Shows pantry contents |
 | `faz-me o menu da semana` | `faz-me o menu da semana` | Generates a 7-day dinner menu + recipes |
+| `faz-me o menu da semana [regras]` | `faz-me o menu da semana só de carne` | Menu respecting user constraints |
 | `receita de <dia>` | `receita de terça` | Shows the stored recipe for that day |
 | `gostei de <prato>` / `não gostei de <prato>` | `não gostei da feijoada` | Records a preference for future menus |
 

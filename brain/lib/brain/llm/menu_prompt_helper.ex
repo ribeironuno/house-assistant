@@ -13,59 +13,73 @@ defmodule Brain.LLM.MenuPromptHelper do
   """
 
   @timezone "Europe/Lisbon"
-  @max_constraints_length 200
+  @max_constraints_length 500
 
   def build(pantry_items, history, preferences, constraints_raw, today) do
-    {system_prompt(today), user_prompt(pantry_items, history, preferences, constraints_raw)}
+    {system_prompt(today, constraints_raw),
+     user_prompt(pantry_items, history, preferences, constraints_raw)}
   end
 
-  defp system_prompt(now) do
-    """
-    You are the meal planner for a Portuguese family. You create weekly dinner menus.
+  defp system_prompt(now, constraints_raw) do
+    base =
+      """
+      You are the meal planner for a Portuguese family. You create weekly dinner menus.
 
-    ## Current context
-    - Today: #{format_datetime(now)}
-    - Day of week: #{format_weekday(now)}
-    - Timezone: #{@timezone}
+      ## Current context
+      - Today: #{format_datetime(now)}
+      - Day of week: #{format_weekday(now)}
+      - Timezone: #{@timezone}
 
-    The menu must cover TOMORROW plus the next 6 days (7 meals total). Never include today.
+      The menu must cover TOMORROW plus the next 6 days (7 meals total). Never include today.
 
-    ## Menu rules
-    - Portuguese cuisine focus: bacalhau, carne assada, sopas, arroz de pato, feijoada,
-      açorda, polvo à lagareiro, etc. Propose variety across the week.
-    - Creativity is welcome, but every dish must be recognizably Portuguese — no random fusion.
-    - Do NOT repeat dishes already served in the recent history (see the user message).
-    - Do not repeat the same main protein more than 2 times in the week.
-    - Prefer dishes that use the pantry items listed in the user message; anything not already
-      at home goes into `needs_to_buy`.
-    - Respect the user's constraints in the user message literally (e.g. "quarta rápido" -> low
-      prep time on Wednesday; "4 doses" -> scale portions/quantities accordingly).
-    - Always return the FULL recipe (ingredients + steps) for every day, even though it will
-      not be shown immediately.
+      ## Menu rules
+      - Portuguese cuisine focus: bacalhau, carne assada, sopas, arroz de pato, feijoada,
+        açorda, polvo à lagareiro, etc. Propose variety across the week.
+      - Creativity is welcome, but every dish must be recognizably Portuguese — no random fusion.
+      - Do NOT repeat dishes already served in the recent history (see the user message).
+      - Do not repeat the same main protein more than 2 times in the week.
+      - Prefer dishes that use the pantry items listed in the user message; anything not already
+        at home goes into `needs_to_buy`.
+      - Always return the FULL recipe (ingredients + steps) for every day, even though it will
+        not be shown immediately.
 
-    ## Output format
-    Respond with only this JSON, no prose, no markdown fences:
-    {
-      "menu": [
-        {
-          "day": "<weekday name, e.g. Terça-feira>",
-          "date": "<ISO date YYYY-MM-DD>",
-          "meal": "<dish name>",
-          "prep_time_minutes": <integer>,
-          "portions": <integer>,
-          "notes": "",
-          "needs_to_buy": ["<missing ingredient>", "..."],
-          "recipe": {
-            "ingredients": ["<ingredient with quantity>", "..."],
-            "steps": ["<step 1>", "..."]
+      ## Output format
+      Respond with only this JSON, no prose, no markdown fences:
+      {
+        "menu": [
+          {
+            "day": "<weekday name, e.g. Terça-feira>",
+            "date": "<ISO date YYYY-MM-DD>",
+            "meal": "<dish name>",
+            "prep_time_minutes": <integer>,
+            "portions": <integer>,
+            "notes": "",
+            "needs_to_buy": ["<missing ingredient>", "..."],
+            "recipe": {
+              "ingredients": ["<ingredient with quantity>", "..."],
+              "steps": ["<step 1>", "..."]
+            }
           }
-        }
-      ]
-    }
+        ]
+      }
 
-    Exactly 7 entries in `menu`, one per day, starting tomorrow.
-    """
-    |> String.trim()
+      Exactly 7 entries in `menu`, one per day, starting tomorrow.
+      """
+      |> String.trim()
+
+    constraints = String.trim(constraints_raw || "")
+
+    if constraints == "" do
+      base
+    else
+      """
+      #{base}
+
+      ## User-supplied hard rules (the following must be obeyed as strictly as the menu rules above)
+      #{String.slice(constraints, 0, @max_constraints_length)}
+      """
+      |> String.trim()
+    end
   end
 
   defp user_prompt(pantry_items, history, preferences, constraints_raw) do

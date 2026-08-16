@@ -204,7 +204,7 @@ learned preferences.
         ├── Pantry.get_all()            → what you have at home
         ├── MenuHistory.recent_meals()  → dishes from last 4 weeks
         ├── MealFeedback.summarize()    → likes and dislikes
-        └── User constraints            → "quarta rápido", "4 doses"
+        └── User constraints            → "só de carne", "quarta rápido", etc.
         │
         ▼
   MenuPromptHelper.build/5 → heavy system prompt with all context
@@ -244,6 +244,19 @@ Diz "receita de terça" para veres o passo a passo.
 - **Pantry-first** — prefers dishes using existing ingredients; the rest goes into `needs_to_buy`.
 - **Full recipes always** — every day includes ingredients + steps (stored for `receita` lookup).
 - **Constraints respected literally** — "quarta rápido" means low prep time on Wednesday.
+
+### User-supplied hard rules
+
+Anything written after `faz-me o menu da semana` is injected into the system prompt as
+`## User-supplied hard rules` and also appears in the user prompt. The LLM obeys these
+constraints as strictly as the built-in menu rules above. Maximum length: 500 characters.
+
+| You say | What happens |
+|---------|-------------|
+| `faz-me o menu da semana só de carne` | All 7 dinners use meat-based proteins |
+| `faz-me o menu da semana só de peixe` | All 7 dinners use fish/seafood |
+| `faz-me o menu da semana usando o que tenho na despensa` | Proteins from pantry; shopping is secondary |
+| `faz-me o menu da semana sem frango e sem porco` | Chicken and pork excluded |
 
 ### Recipes
 

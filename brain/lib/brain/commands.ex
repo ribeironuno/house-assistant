@@ -27,6 +27,8 @@ defmodule Brain.Commands do
 
              🍽️ Menu da Semana
              - faz-me o menu da semana
+             - faz-me o menu da semana só de carne
+             - faz-me o menu da semana usando o que tenho na despensa
              - receita de <dia>
              - gostei de <prato> / não gostei de <prato>
 
