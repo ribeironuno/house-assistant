@@ -14,6 +14,7 @@ defmodule Brain.ShoppingList.InvoiceProcessorTest do
 
   setup do
     :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)
+    ensure_group(@group_id)
     on_exit(fn -> TestStub.reset() end)
   end
 

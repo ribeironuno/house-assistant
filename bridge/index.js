@@ -21,8 +21,8 @@
 import qrcode from "qrcode-terminal";
 import pkg from "whatsapp-web.js";
 
-import { PORT, BRIDGE_AUTH_TOKEN } from "./src/config.js";
-import { handleIncomingMessage, handleGroupJoin } from "./src/handler.js";
+import { BRIDGE_AUTH_TOKEN, PORT } from "./src/config.js";
+import { handleGroupJoin, handleIncomingMessage } from "./src/handler.js";
 import { createServer } from "./src/server.js";
 
 const { Client, LocalAuth } = pkg;

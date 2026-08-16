@@ -7,6 +7,7 @@ defmodule Brain.Reminders.DispatcherTest do
 
   setup do
     :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)
+    ensure_group("group_1")
     :ok
   end
 

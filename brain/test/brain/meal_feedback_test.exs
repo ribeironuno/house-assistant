@@ -6,6 +6,7 @@ defmodule Brain.MealFeedbackTest do
 
   setup do
     :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)
+    ensure_group("group_1")
   end
 
   test "create persists meal feedback" do

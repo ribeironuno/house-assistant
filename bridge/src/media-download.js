@@ -35,7 +35,10 @@ export async function downloadMediaFixed(
     const chat = await message.getChat();
     await chat.fetchMessages({ limit: 5 });
   } catch (e) {
-    console.error("[Bridge] Failed to pre-load chat for media lookup:", e.message);
+    console.error(
+      "[Bridge] Failed to pre-load chat for media lookup:",
+      e.message,
+    );
   }
 
   const msgKeys = buildMsgKeys(message);

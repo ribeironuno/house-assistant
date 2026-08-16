@@ -59,6 +59,7 @@ defmodule Brain.MenuPlannerTest do
 
   setup do
     :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)
+    ensure_group("group_1")
     Application.put_env(:brain, :llm_provider, MockProvider)
     Application.put_env(:brain, :menu_planner_enabled, true)
 

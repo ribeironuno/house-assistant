@@ -77,7 +77,9 @@ defmodule BrainWeb.WebhookController do
 
   def create(conn, %{"group_id" => group_id, "sender" => sender, "text" => text}) do
     with_group_gating(group_id, text, sender, fn ->
-      Logger.info("[Brain] Received message in group #{group_id} from #{sender}: #{inspect(text)}")
+      Logger.info(
+        "[Brain] Received message in group #{group_id} from #{sender}: #{inspect(text)}"
+      )
 
       case Brain.Commands.handle(text, sender, group_id) do
         {:reply, reply_text} -> BridgeClient.send_message(group_id, reply_text)

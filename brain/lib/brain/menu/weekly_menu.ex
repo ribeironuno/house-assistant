@@ -19,5 +19,6 @@ defmodule Brain.Menu.WeeklyMenu do
     weekly_menu
     |> cast(attrs, [:group_id, :constraints_raw, :meals, :generated_at])
     |> validate_required([:group_id, :meals])
+    |> foreign_key_constraint(:group_id)
   end
 end

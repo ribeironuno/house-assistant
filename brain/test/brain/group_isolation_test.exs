@@ -11,6 +11,8 @@ defmodule Brain.GroupIsolationTest do
 
   setup do
     :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)
+    ensure_group(@group_a)
+    ensure_group(@group_b)
   end
 
   test "shopping list items are isolated per group" do

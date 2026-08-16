@@ -10,6 +10,7 @@ defmodule Brain.PantryTest do
 
   setup do
     :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)
+    ensure_group(@group_id)
   end
 
   test "add_many adds multiple items to pantry" do

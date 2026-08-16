@@ -23,6 +23,7 @@ defmodule Brain.Reminders.Reminder do
     reminder
     |> cast(attrs, [:text, :group_id, :created_by, :remind_at, :sent_at])
     |> validate_required([:text, :group_id, :remind_at])
+    |> foreign_key_constraint(:group_id)
     |> update_change(:text, &String.trim/1)
     |> validate_length(:text, min: 1)
   end

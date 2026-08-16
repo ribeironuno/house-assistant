@@ -1,6 +1,6 @@
+import crypto from "crypto";
 import express from "express";
 import { registerSentMessage } from "./loop-prevention.js";
-import crypto from "crypto";
 
 /**
  * Constant-time string comparison to prevent timing attacks.
@@ -62,7 +62,9 @@ export function createServer(client, isConnectedFn, { authToken }) {
     const { to, text } = req.body;
 
     if (!to || !to.endsWith("@g.us") || typeof text !== "string" || !text) {
-      return res.status(400).json({ error: "Missing or invalid 'to' or 'text'" });
+      return res
+        .status(400)
+        .json({ error: "Missing or invalid 'to' or 'text'" });
     }
 
     if (!isConnectedFn()) {

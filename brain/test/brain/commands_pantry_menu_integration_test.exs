@@ -69,6 +69,7 @@ defmodule Brain.CommandsPantryMenuIntegrationTest do
 
   setup do
     :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)
+    ensure_group(@group_id)
     Application.put_env(:brain, :llm_command_interpreter_enabled, true)
     Application.put_env(:brain, :llm_provider, RoutingProvider)
     Application.put_env(:brain, :menu_planner_enabled, true)

@@ -20,5 +20,6 @@ defmodule Brain.Menu.MealFeedback do
     |> cast(attrs, [:group_id, :meal_name, :sentiment, :raw_text])
     |> validate_required([:group_id, :meal_name, :sentiment])
     |> validate_inclusion(:sentiment, ["like", "dislike"])
+    |> foreign_key_constraint(:group_id)
   end
 end

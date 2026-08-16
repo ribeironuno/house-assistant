@@ -31,6 +31,7 @@ defmodule Brain.ShoppingList.Item do
     shopping_item
     |> cast(attrs, [:name, :added_by, :group_id, :done])
     |> validate_required([:name, :group_id])
+    |> foreign_key_constraint(:group_id)
     |> validate_length(:name, max: 255)
     |> update_change(:name, &String.trim/1)
   end

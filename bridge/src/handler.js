@@ -40,7 +40,10 @@ export async function handleIncomingMessage(client, message) {
   }
 
   let mediaData = null;
-  if (message.hasMedia && (message.type === "image" || message.type === "document")) {
+  if (
+    message.hasMedia &&
+    (message.type === "image" || message.type === "document")
+  ) {
     console.log(
       "[Bridge] Attempting media download for message:",
       message.id?.id,
@@ -138,9 +141,14 @@ export async function handleGroupJoin(client, notification) {
     });
 
     if (!response.ok) {
-      console.error(`[Bridge] group_join webhook returned HTTP ${response.status}`);
+      console.error(
+        `[Bridge] group_join webhook returned HTTP ${response.status}`,
+      );
     }
   } catch (err) {
-    console.error("[Bridge] Failed to notify brain of group_join:", err.message);
+    console.error(
+      "[Bridge] Failed to notify brain of group_join:",
+      err.message,
+    );
   }
 }

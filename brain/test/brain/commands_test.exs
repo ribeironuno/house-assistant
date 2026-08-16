@@ -12,6 +12,7 @@ defmodule Brain.CommandsTest do
 
   setup do
     :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)
+    ensure_group(@group_id)
   end
 
   test "adiciona command adds item to shopping list and returns confirmation" do

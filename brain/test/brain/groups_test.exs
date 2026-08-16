@@ -4,6 +4,10 @@ defmodule Brain.GroupsTest do
   alias Brain.Repo
   alias Brain.Groups
   alias Brain.Groups.Group
+  alias Brain.Pantry
+  alias Brain.Pantry.Item, as: PantryItem
+  alias Brain.ShoppingList
+  alias Brain.ShoppingList.Item, as: ShoppingItem
 
   @group_id "120363000000000001@g.us"
 
@@ -133,6 +137,43 @@ defmodule Brain.GroupsTest do
 
       Groups.activate(@group_id)
       assert Groups.active?(@group_id)
+    end
+  end
+
+  describe "foreign key constraints" do
+    test "deleting a group cascades to its shopping, pantry, and reminder records" do
+      Groups.activate(@group_id)
+      ShoppingList.add("leite", @group_id, "user_1")
+      Pantry.add_many(["arroz"], @group_id, "user_1")
+
+      Repo.insert(
+        Brain.Reminders.Reminder.changeset(%Brain.Reminders.Reminder{}, %{
+          text: "pagar conta",
+          remind_at: DateTime.add(DateTime.utc_now(), 60, :second),
+          created_by: "user_1",
+          group_id: @group_id
+        })
+      )
+
+      Repo.delete!(Repo.get(Group, @group_id))
+
+      assert Repo.all(ShoppingItem) == []
+      assert Repo.all(PantryItem) == []
+      assert Repo.all(Brain.Reminders.Reminder) == []
+    end
+
+    test "child records cannot be created for a non-existent group" do
+      refute Repo.get(Group, @group_id)
+
+      assert {:error, _changeset} =
+               Repo.insert(
+                 ShoppingItem.changeset(%ShoppingItem{}, %{
+                   name: "leite",
+                   group_id: @group_id
+                 })
+               )
+
+      assert Repo.all(ShoppingItem) == []
     end
   end
 end
