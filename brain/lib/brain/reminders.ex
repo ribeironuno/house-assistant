@@ -5,10 +5,22 @@ defmodule Brain.Reminders do
   Owns reminder command parsing, persistence, and Portuguese responses.
   """
 
+  import Ecto.Query
+
   alias Brain.Repo
   alias Brain.Reminders.Reminder
 
   @lisbon_tz "Europe/Lisbon"
+
+  @doc """
+  Deletes every reminder scheduled for a group.
+  """
+  def clear(group_id) do
+    from(r in Reminder, where: r.group_id == ^group_id)
+    |> Repo.delete_all()
+
+    {:reply, "[BOT] 🔔 Lembretes apagados."}
+  end
 
   def schedule_from_text(_raw_text, _sender, nil) do
     {:reply, "[BOT] Não consigo guardar um lembrete sem saber em que grupo devo responder."}

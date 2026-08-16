@@ -7,6 +7,7 @@ defmodule Brain.Commands do
   live in their own context modules.
   """
 
+  alias Brain.Pantry
   alias Brain.Reminders
   alias Brain.ShoppingList
 
@@ -16,7 +17,7 @@ defmodule Brain.Commands do
              - adiciona <item> ou adiciona <item>, <item>
              - remove <item>
              - lista
-             - limpar lista
+             - limpar lista / limpar compras
 
              🏠 Despensa
              - tenho <item> ou tenho <item>, <item>
@@ -33,6 +34,10 @@ defmodule Brain.Commands do
              - lembrar de <tarefa> logo
              - lembrar de <tarefa> amanhã
              - lembrar de <tarefa> daqui a N minutos/horas/dias/semanas
+             - limpar lembretes
+
+             🧹 Limpar tudo
+             - limpar tudo (compras, despensa e lembretes)
 
              ❔ Ajuda
              - ajuda
@@ -55,6 +60,16 @@ defmodule Brain.Commands do
   def handle(_text, _sender, _group_id), do: :ignore
 
   defp route(trimmed_raw, trimmed_lower, sender, group_id, llm_attempted? \\ false) do
+    case clear_scopes(trimmed_lower) do
+      [] ->
+        route_non_clear(trimmed_raw, trimmed_lower, sender, group_id, llm_attempted?)
+
+      scopes ->
+        clear_scopes_reply(group_id, scopes)
+    end
+  end
+
+  defp route_non_clear(trimmed_raw, trimmed_lower, sender, group_id, llm_attempted?) do
     cond do
       help_command?(trimmed_lower) ->
         {:reply, @help_text}
@@ -64,9 +79,6 @@ defmodule Brain.Commands do
 
       trimmed_lower in ["lista", "mostrar lista", "ver lista", "list", "show list"] ->
         ShoppingList.list(group_id)
-
-      trimmed_lower in ["limpar", "limpar lista", "clear", "clear list"] ->
-        ShoppingList.clear(group_id)
 
       String.starts_with?(trimmed_lower, "adicionar") ->
         trimmed_raw
@@ -151,6 +163,41 @@ defmodule Brain.Commands do
     # like "por favor ...", "lembrete ..." or a bare emoji can be legitimate
     # user messages and must not be dropped.
     String.starts_with?(trimmed_lower, ["[bot]"])
+  end
+
+  defp clear_scopes(trimmed_lower) do
+    if String.starts_with?(trimmed_lower, ["limpar", "limpa", "apagar", "apaga", "clear"]) do
+      if String.contains?(trimmed_lower, "tudo") do
+        [:shopping, :pantry, :reminders]
+      else
+        scopes =
+          []
+          |> maybe_add_scope(String.contains?(trimmed_lower, "compras"), :shopping)
+          |> maybe_add_scope(String.contains?(trimmed_lower, "despensa"), :pantry)
+          |> maybe_add_scope(String.contains?(trimmed_lower, "lembrete"), :reminders)
+
+        # Bare "limpar" / "clear" without a scope defaults to the shopping list.
+        if scopes == [], do: [:shopping], else: scopes
+      end
+    else
+      []
+    end
+  end
+
+  defp maybe_add_scope(scopes, true, scope), do: [scope | scopes]
+  defp maybe_add_scope(scopes, _false, _scope), do: scopes
+
+  defp clear_scopes_reply(group_id, scopes) do
+    replies =
+      scopes
+      |> Enum.sort()
+      |> Enum.map(fn
+        :shopping -> ShoppingList.clear(group_id)
+        :pantry -> Pantry.clear(group_id)
+        :reminders -> Reminders.clear(group_id)
+      end)
+
+    {:reply, Enum.join(Enum.map(replies, fn {:reply, text} -> text end), "\n")}
   end
 
   defp reminder_command?(trimmed_lower) do

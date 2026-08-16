@@ -113,7 +113,7 @@ The assistant is case-insensitive and silently ignores unrecognised messages.
 | `adiciona <item>[, <item>]` | `adiciona leite, pão, manteiga` | `[BOT] ✅ Adicionados:\n1. leite\n2. pão\n3. manteiga` |
 | `remove <item>` | `remove leite` | `[BOT] 🗑️ Removido: leite` |
 | `lista` / `ver lista` | `lista` | `[BOT] 🛒 Lista de Compras:\n1. leite\n…` |
-| `limpar lista` | `limpar lista` | `[BOT] 🧹 Lista de compras limpa.` |
+| `limpar lista` / `limpar compras` | `limpar lista` | `[BOT] 🧹 Lista de compras limpa.` |
 
 Items are matched by substring — `remove leite` also removes `Leite Gordo`.
 
@@ -125,8 +125,15 @@ Items are matched by substring — `remove leite` also removes `Leite Gordo`.
 | `lembra-me de <tarefa> amanhã` | `lembra-me de pagar a água amanhã` | Tomorrow at 10:00 |
 | `lembrar de <tarefa> logo` | `lembrar de fazer isto logo` | Today at 19:00 (21:00 after 18:00) |
 | `lembrar de <tarefa> à sexta` / `às 18h` | `lembrar de ligar à avó à sexta` | Next occurrence |
+| `limpar lembretes` | `limpar lembretes` | Deletes all pending reminders |
 
 Due reminders are posted back to the group as `[BOT] 🔔 Lembrete: <tarefa>`.
+
+### Clearing everything
+
+| Command | Example | What happens |
+|---|---|---|
+| `limpar tudo` | `limpar tudo` | Clears shopping list + pantry + reminders in one command |
 
 ### Pantry & menu
 

@@ -117,6 +117,64 @@ defmodule Brain.CommandsTest do
     assert Repo.all(Item) == []
   end
 
+  test "limpar compras command deletes only the shopping list" do
+    Commands.handle("adiciona leite", "user_1", @group_id)
+    Brain.Pantry.add_many(["arroz"], @group_id, "user_1")
+
+    assert {:reply, "[BOT] 🧹 Lista de compras limpa."} =
+             Commands.handle("limpar compras", "user_1", @group_id)
+
+    assert Repo.all(Item) == []
+    assert length(Repo.all(Brain.Pantry.Item)) == 1
+  end
+
+  test "limpar despensa command deletes only the pantry" do
+    Commands.handle("adiciona leite", "user_1", @group_id)
+    Brain.Pantry.add_many(["arroz", "atum"], @group_id, "user_1")
+
+    assert {:reply, "[BOT] 🧹 Despensa limpa."} =
+             Commands.handle("limpar despensa", "user_1", @group_id)
+
+    assert length(Repo.all(Item)) == 1
+    assert Repo.all(Brain.Pantry.Item) == []
+  end
+
+  test "limpar lembretes command deletes only reminders" do
+    Commands.handle("lembrar de pagar scouts amanhã", "user_1", @group_id)
+    Commands.handle("adiciona leite", "user_1", @group_id)
+
+    assert {:reply, "[BOT] 🔔 Lembretes apagados."} =
+             Commands.handle("limpar lembretes", "user_1", @group_id)
+
+    assert Repo.all(Reminder) == []
+    assert length(Repo.all(Item)) == 1
+  end
+
+  test "limpar tudo command clears shopping list, pantry, and reminders" do
+    Commands.handle("adiciona leite", "user_1", @group_id)
+    Brain.Pantry.add_many(["arroz"], @group_id, "user_1")
+    Commands.handle("lembrar de pagar scouts amanhã", "user_1", @group_id)
+
+    assert {:reply, reply} = Commands.handle("limpar tudo", "user_1", @group_id)
+    assert reply =~ "Lista de compras limpa"
+    assert reply =~ "Despensa limpa"
+    assert reply =~ "Lembretes apagados"
+
+    assert Repo.all(Item) == []
+    assert Repo.all(Brain.Pantry.Item) == []
+    assert Repo.all(Reminder) == []
+  end
+
+  test "limpar tudo command clears data of the requesting group only" do
+    ensure_group("group_2")
+    Commands.handle("adiciona leite", "user_1", @group_id)
+    Commands.handle("adiciona pão", "user_1", "group_2")
+
+    assert {:reply, _reply} = Commands.handle("limpar tudo", "user_1", @group_id)
+
+    assert Enum.map(Repo.all(Item), & &1.name) == ["pão"]
+  end
+
   test "ajuda command lists known commands" do
     assert {:reply, reply} = Commands.handle("ajuda", "user_1", @group_id)
 

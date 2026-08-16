@@ -44,8 +44,9 @@ When a text message arrives, `Brain.Commands.handle/3` tries to match it in orde
 
 1. **Help** — `ajuda` / `help` / `comandos` → shows the full help text.
 2. **Reminders** — starts with `lembrar de` / `lembra-me de` → `Brain.Reminders`.
-3. **Shopping list** — `adiciona`, `remove`, `lista`, `limpar lista` → `Brain.ShoppingList`.
-4. **LLM fallback** — anything else goes to `Brain.LLM.CommandInterpreter` which asks
+3. **Shopping list** — `adiciona`, `remove`, `lista`, `limpar lista` / `limpar compras` → `Brain.ShoppingList`.
+4. **Cleaning** — `limpar despensa`, `limpar lembretes`, `limpar tudo` → clears the matching data.
+5. **LLM fallback** — anything else goes to `Brain.LLM.CommandInterpreter` which asks
    Gemini to classify the message into one of 14 known actions (see table below).
 
 The LLM runs on every unmatched message and must stay fast (15-second timeout). The
@@ -160,6 +161,24 @@ group when it's time.
 | `amanhã de manhã` | Tomorrow at 09:00 |
 | `à sexta` | Next Friday at 10:00 |
 | `às 18h` | Today (or next occurrence) at 18:00 |
+
+### Clearing reminders
+
+| You say | What happens |
+|---------|-------------|
+| `limpar lembretes` | Deletes every pending reminder in the group |
+
+---
+
+## Clearing everything
+
+`limpar tudo` (or `limpa tudo`, `apagar tudo`) clears **all** per-group data in one
+command: the shopping list, the pantry, and every pending reminder. The bot replies
+with a summary of the three cleared lists.
+
+| You say | What happens |
+|---------|-------------|
+| `limpar tudo` | Clears shopping list + pantry + reminders |
 
 ---
 
