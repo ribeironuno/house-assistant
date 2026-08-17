@@ -20,6 +20,10 @@ RUN npm ci && npm cache clean --force
 
 COPY . .
 
+RUN groupadd -r nodeuser && useradd -r -g nodeuser nodeuser
+RUN chown -R nodeuser:nodeuser /app
+USER nodeuser
+
 EXPOSE 3000
 
 # Remove stale Chromium profile locks left behind by previous container runs.

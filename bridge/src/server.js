@@ -19,22 +19,21 @@ function timingSafeEqual(a, b) {
  * @param {object} client - The whatsapp-web.js Client instance.
  * @param {function} isConnectedFn - Returns current connection state.
  * @param {object} options
- * @param {string} options.authToken - Shared secret for /send and /leave (empty = no auth, dev only).
+ * @param {string} options.authToken - Shared secret for /send and /leave (MUST be set in production).
  * @returns {import("express").Express}
  */
 export function createServer(client, isConnectedFn, { authToken }) {
+  if (!authToken) {
+    throw new Error("BRIDGE_AUTH_TOKEN must be set");
+  }
+
   const app = express();
   app.use(express.json());
 
-  const hasAuth = Boolean(authToken);
-
   // ---------------------------------------------------------------------------
   // Shared Bearer-token auth middleware (applies to /send and /leave).
-  // When no token is configured (dev), all requests are allowed through.
   // ---------------------------------------------------------------------------
   function requireToken(req, res, next) {
-    if (!hasAuth) return next();
-
     const header = req.headers.authorization;
     if (!header || !header.startsWith("Bearer ")) {
       return res.status(401).json({ error: "Missing or invalid token" });

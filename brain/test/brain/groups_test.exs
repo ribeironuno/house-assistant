@@ -1,5 +1,5 @@
 defmodule Brain.GroupsTest do
-  use BrainWeb.ConnCase, async: true
+  use BrainWeb.ConnCase, async: false
 
   alias Brain.Repo
   alias Brain.Groups
@@ -13,19 +13,21 @@ defmodule Brain.GroupsTest do
 
   setup do
     :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)
+    Repo.delete_all(Group)
+    :ok
   end
 
   describe "handle_join/1" do
-    test "unknown group is registered as pending and bot introduces itself" do
-      assert {:reply, intro} = Groups.handle_join(@group_id)
-      assert intro == Groups.intro_text()
+    test "unknown group is registered as waiting_approval and bot stays silent" do
+      assert :ignore = Groups.handle_join(@group_id)
 
       group = Repo.get(Group, @group_id)
-      assert group.status == "pending"
+      assert group.status == "waiting_approval"
       assert group.group_id == @group_id
     end
 
     test "active group is ignored (no re-introduction)" do
+      Groups.register_pending(@group_id)
       Groups.activate(@group_id)
 
       assert :ignore = Groups.handle_join(@group_id)
@@ -33,19 +35,54 @@ defmodule Brain.GroupsTest do
     end
 
     test "left group is re-registered as pending when re-added" do
+      Groups.register_pending(@group_id)
+      Groups.activate(@group_id)
       Groups.mark_left(@group_id)
 
       assert {:reply, intro} = Groups.handle_join(@group_id)
       assert intro == Groups.intro_text()
       assert Repo.get(Group, @group_id).status == "pending"
     end
+
+    test "blocked group is ignored" do
+      Groups.register_pending(@group_id)
+      Groups.activate(@group_id)
+      Groups.block_group(@group_id)
+
+      assert :ignore = Groups.handle_join(@group_id)
+      assert Repo.get(Group, @group_id).status == "blocked"
+    end
+
+    test "group name is saved when provided in opts" do
+      assert :ignore = Groups.handle_join(@group_id, %{group_name: "Família Silva"})
+
+      group = Repo.get(Group, @group_id)
+      assert group.status == "waiting_approval"
+      assert group.name == "Família Silva"
+    end
+
+    test "waiting_approval group is ignored (no re-introduction)" do
+      # creates waiting_approval
+      Groups.handle_join(@group_id)
+
+      assert :ignore = Groups.handle_join(@group_id)
+      assert Repo.get(Group, @group_id).status == "waiting_approval"
+    end
   end
 
   describe "handle_message/3" do
-    test "unknown group is registered as pending and bot introduces itself" do
-      assert {:reply, intro} = Groups.handle_message(@group_id, "adiciona leite", "user_1")
-      assert intro == Groups.intro_text()
-      assert Repo.get(Group, @group_id).status == "pending"
+    test "unknown group is registered as waiting_approval and bot stays silent" do
+      assert :ignore = Groups.handle_message(@group_id, "adiciona leite", "user_1")
+
+      assert Repo.get(Group, @group_id).status == "waiting_approval"
+    end
+
+    test "waiting_approval group messages are ignored" do
+      # creates waiting_approval
+      Groups.handle_join(@group_id)
+
+      assert :ignore = Groups.handle_message(@group_id, "adiciona leite", "user_1")
+      assert Repo.get(Group, @group_id).status == "waiting_approval"
     end
 
     test "pending group answering 'sim' is activated" do
@@ -94,6 +131,7 @@ defmodule Brain.GroupsTest do
     end
 
     test "active group messages proceed" do
+      Groups.register_pending(@group_id)
       Groups.activate(@group_id)
 
       assert :proceed = Groups.handle_message(@group_id, "adiciona leite", "user_1")
@@ -101,9 +139,19 @@ defmodule Brain.GroupsTest do
     end
 
     test "left group messages are ignored" do
+      Groups.register_pending(@group_id)
       Groups.mark_left(@group_id)
 
       assert :ignore = Groups.handle_message(@group_id, "adiciona leite", "user_1")
+    end
+
+    test "blocked group messages are ignored" do
+      Groups.register_pending(@group_id)
+      Groups.activate(@group_id)
+      Groups.block_group(@group_id)
+
+      assert :ignore = Groups.handle_message(@group_id, "adiciona leite", "user_1")
+      assert Repo.get(Group, @group_id).status == "blocked"
     end
   end
 
@@ -117,6 +165,7 @@ defmodule Brain.GroupsTest do
     end
 
     test "activate is idempotent" do
+      Groups.register_pending(@group_id)
       Groups.activate(@group_id)
       Groups.activate(@group_id)
 
@@ -125,6 +174,7 @@ defmodule Brain.GroupsTest do
     end
 
     test "mark_left updates an existing active group" do
+      Groups.register_pending(@group_id)
       Groups.activate(@group_id)
       Groups.mark_left(@group_id)
 
@@ -133,6 +183,7 @@ defmodule Brain.GroupsTest do
     end
 
     test "active?/1 reflects the stored status" do
+      Groups.register_pending(@group_id)
       refute Groups.active?(@group_id)
 
       Groups.activate(@group_id)
@@ -140,8 +191,62 @@ defmodule Brain.GroupsTest do
     end
   end
 
+  describe "admin actions" do
+    test "approve_group moves waiting_approval to pending and sends intro" do
+      # creates waiting_approval
+      Groups.handle_join(@group_id)
+
+      assert :ok = Groups.approve_group(@group_id)
+      assert Repo.get(Group, @group_id).status == "pending"
+    end
+
+    test "approve_group fails for non-waiting_approval groups" do
+      Groups.register_pending(@group_id)
+
+      assert {:error, :not_waiting_approval} = Groups.approve_group(@group_id)
+      assert Repo.get(Group, @group_id).status == "pending"
+    end
+
+    test "block_group moves pending/active/left/waiting_approval to blocked" do
+      Groups.register_pending("group_pending")
+      assert :ok = Groups.block_group("group_pending")
+      assert Repo.get(Group, "group_pending").status == "blocked"
+
+      Groups.activate("group_active")
+      assert :ok = Groups.block_group("group_active")
+      assert Repo.get(Group, "group_active").status == "blocked"
+    end
+
+    test "unblock_group moves blocked to pending and sends intro" do
+      Groups.register_pending("group_blocked")
+      Groups.activate("group_blocked")
+      Groups.block_group("group_blocked")
+
+      assert :ok = Groups.unblock_group("group_blocked")
+      assert Repo.get(Group, "group_blocked").status == "pending"
+    end
+
+    test "delete_group completely removes group and dependent records so future messages act as a new group" do
+      Groups.register_pending(@group_id)
+      Groups.activate(@group_id)
+      ShoppingList.add("leite", @group_id, "user_1")
+      Pantry.add_many(["arroz"], @group_id, "user_1")
+      assert Repo.get(Group, @group_id)
+
+      assert :ok = Groups.delete_group(@group_id)
+      refute Repo.get(Group, @group_id)
+      assert Repo.all(ShoppingItem) == []
+      assert Repo.all(PantryItem) == []
+
+      assert :ignore = Groups.handle_message(@group_id, "olá", "user_1")
+      group = Repo.get(Group, @group_id)
+      assert group.status == "waiting_approval"
+    end
+  end
+
   describe "foreign key constraints" do
     test "deleting a group cascades to its shopping, pantry, and reminder records" do
+      Groups.register_pending(@group_id)
       Groups.activate(@group_id)
       ShoppingList.add("leite", @group_id, "user_1")
       Pantry.add_many(["arroz"], @group_id, "user_1")

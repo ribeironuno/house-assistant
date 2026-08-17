@@ -49,7 +49,13 @@ defmodule Brain.MixProject do
       {:req, "~> 0.5"},
       {:tz, "~> 0.28"},
       {:ecto_sql, "~> 3.12"},
-      {:postgrex, ">= 0.0.0"}
+      {:postgrex, ">= 0.0.0"},
+      {:phoenix_live_view, "~> 1.0"},
+      {:phoenix_live_dashboard, "~> 0.8"},
+      {:oban, "~> 2.17"},
+      {:bcrypt_elixir, "~> 3.0"},
+      {:hammer, "~> 6.0"},
+      {:hammer_plug, "~> 3.2"}
     ]
   end
 

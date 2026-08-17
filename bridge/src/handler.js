@@ -57,14 +57,34 @@ async function postToBrain(payload) {
 }
 
 /**
- * Sends a direct feedback message to a group, ignoring failures (best effort).
+ * Helper to retrieve the group name/subject from whatsapp-web.js.
  */
-async function sendGroupReply(client, groupId, text) {
+async function getGroupName(client, msgOrNotif, groupId) {
   try {
-    await client.sendMessage(groupId, text);
+    if (msgOrNotif && typeof msgOrNotif.getChat === "function") {
+      const chat = await msgOrNotif.getChat();
+      if (chat) {
+        const name = chat.name || chat.formattedTitle || chat.subject;
+        if (name) return name;
+      }
+    }
   } catch (err) {
-    console.error("[Bridge] Failed to send feedback message:", err.message);
+    // Ignore error and try fallback
   }
+
+  try {
+    if (client && typeof client.getChatById === "function") {
+      const chat = await client.getChatById(groupId);
+      if (chat) {
+        const name = chat.name || chat.formattedTitle || chat.subject;
+        if (name) return name;
+      }
+    }
+  } catch (err) {
+    // Ignore error
+  }
+
+  return null;
 }
 
 /**
@@ -112,12 +132,6 @@ export async function handleIncomingMessage(client, message) {
             `[Bridge] Media too large (${messageMedia.data.length} base64 chars), skipping download for message:`,
             message.id?.id,
           );
-
-          await sendGroupReply(
-            client,
-            groupId,
-            "[BOT] 📷 A imagem é demasiado grande para processar (máx. ~4 MB). Envia uma foto mais pequena.",
-          );
           return;
         }
 
@@ -140,8 +154,11 @@ export async function handleIncomingMessage(client, message) {
     }
   }
 
+  const groupName = await getGroupName(client, message, groupId);
+
   console.log("[Bridge] Processing incoming command from group", {
     group: groupId,
+    groupName: groupName,
     sender: message.author ?? message.from,
     fromMe: message.fromMe,
     text: message.body,
@@ -150,19 +167,17 @@ export async function handleIncomingMessage(client, message) {
 
   const response = await postToBrain({
     group_id: groupId,
+    group_name: groupName,
     sender: message.author ?? message.from,
     text: message.body || "",
     media: mediaData,
     from_me: message.fromMe,
     timestamp: message.timestamp,
+    message_id: message.id?.id,
   });
 
   if (!response) {
-    await sendGroupReply(
-      client,
-      groupId,
-      "[BOT] 😕 Não consegui processar a tua mensagem agora. Tenta novamente daqui a pouco.",
-    );
+    console.error("[Bridge] Webhook failed after all retries — no message sent to group");
   }
 }
 
@@ -189,7 +204,9 @@ export async function handleGroupJoin(client, notification) {
     return;
   }
 
-  console.log("[Bridge] Bot was added to group", groupId);
+  const groupName = await getGroupName(client, notification, groupId);
+
+  console.log("[Bridge] Bot was added to group", groupId, groupName);
 
   try {
     const response = await fetch(ELIXIR_WEBHOOK_URL, {
@@ -198,6 +215,8 @@ export async function handleGroupJoin(client, notification) {
       body: JSON.stringify({
         event: "group_join",
         group_id: groupId,
+        group_name: groupName,
+        message_id: `group_join_${groupId}_${Date.now()}`,
       }),
     });
 

@@ -24,12 +24,14 @@ defmodule Brain.WhatsApp.BridgeClient do
   Asks the Bridge to leave a WhatsApp group.
   """
   def leave_group(group_id) do
-    if Application.get_env(:brain, :send_outgoing_messages, true) == false do
-      Logger.info("[Brain] Outgoing messages disabled by config: leave group #{group_id}")
-      :ok
-    else
-      do_post(bridge_url("leave"), %{group_id: group_id})
-    end
+    do_post(bridge_url("leave"), %{group_id: group_id})
+  end
+
+  @doc """
+  Helper for Groups.request_leave/1 — just POSTs leave, no send_outgoing_messages guard.
+  """
+  def request_leave(group_id) do
+    do_post(bridge_url("leave"), %{group_id: group_id})
   end
 
   defp do_post(url, body) do
@@ -54,9 +56,9 @@ defmodule Brain.WhatsApp.BridgeClient do
         Logger.info("[Brain] Bridge request confirmed")
         :ok
 
-      {:ok, %Req.Response{status: status, body: body}} ->
-        Logger.error("[Brain] Bridge responded with HTTP #{status}: #{inspect(body)}")
-        {:error, {:http_error, status, body}}
+      {:ok, %Req.Response{status: status, body: resp_body}} ->
+        Logger.error("[Brain] Bridge responded with HTTP #{status}: #{inspect(resp_body)}")
+        {:error, {:http_error, status, resp_body}}
 
       {:error, exception} ->
         Logger.error(

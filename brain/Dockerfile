@@ -17,6 +17,20 @@ COPY priv priv
 
 RUN mix compile
 
+FROM elixir:1.18-alpine
+
+RUN apk add --no-cache libstdc++ ncurses-libs openssl postgresql-client
+
+RUN addgroup -g 1000 -S app && adduser -u 1000 -S app -G app
+
+WORKDIR /app
+
+COPY --from=builder /app .
+
+RUN chown -R app:app /app
+
+USER app
+
 EXPOSE 4000
 
 ENV PORT=4000

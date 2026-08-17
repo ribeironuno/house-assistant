@@ -13,6 +13,12 @@ defmodule Brain.Pantry do
   alias Brain.Repo
   alias Brain.Pantry.Item
 
+  defp escape_ilike(term) do
+    term
+    |> String.replace("%", "\\%")
+    |> String.replace("_", "\\_")
+  end
+
   def add_many([], _group_id, _added_by) do
     {:reply, "[BOT] Por favor especifica os itens, ex: 'tenho arroz, frango, atum'."}
   end
@@ -29,17 +35,26 @@ defmodule Brain.Pantry do
   Rolls back all inserts if any fails. Returns `{:ok, items}` or `{:error, :insert_failed}`.
   """
   def add_many_models(names, group_id, added_by) when is_list(names) do
-    inserted_items =
-      Enum.map(names, fn name ->
+    multi =
+      Enum.reduce(names, Ecto.Multi.new(), fn name, acc ->
         changeset = Item.changeset(%Item{}, %{name: name, added_by: added_by, group_id: group_id})
-        Repo.insert(changeset)
+        safe_key = String.replace(name, ~r/[^a-zA-Z0-9_]/, "_")
+        Ecto.Multi.insert(acc, :"item_#{safe_key}", changeset)
       end)
 
-    if Enum.all?(inserted_items, &match?({:ok, _item}, &1)) do
-      {:ok, Enum.map(inserted_items, fn {:ok, item} -> item end)}
-    else
-      rollback_inserted_items(inserted_items)
-      {:error, :insert_failed}
+    case Repo.transaction(multi) do
+      {:ok, results} ->
+        items = Enum.map(results, fn {_key, item} -> item end)
+        # Preserve the original order from the input names
+        ordered_items =
+          Enum.flat_map(names, fn name ->
+            Enum.filter(items, &(&1.name == name))
+          end)
+
+        {:ok, ordered_items}
+
+      {:error, _key, _result, _changes} ->
+        {:error, :insert_failed}
     end
   end
 
@@ -49,13 +64,14 @@ defmodule Brain.Pantry do
 
   def remove(search_term, group_id) do
     cleaned = Brain.Text.strip_leading_articles(search_term)
+    escaped = escape_ilike(cleaned)
 
     if cleaned == "" do
       {:reply, "[BOT] Por favor especifica o item a remover, ex: 'usei arroz'."}
     else
       query =
         from(i in Item,
-          where: i.group_id == ^group_id and ilike(i.name, ^"%#{cleaned}%"),
+          where: i.group_id == ^group_id and ilike(i.name, ^"%#{escaped}%"),
           order_by: [desc: i.inserted_at],
           limit: 1
         )
@@ -91,15 +107,6 @@ defmodule Brain.Pantry do
 
   def get_all(group_id) do
     Repo.all(from(i in Item, where: i.group_id == ^group_id, order_by: [asc: i.inserted_at]))
-  end
-
-  defp rollback_inserted_items(inserted_items) do
-    Repo.transaction(fn ->
-      Enum.each(inserted_items, fn
-        {:ok, item} -> Repo.delete(item)
-        {:error, _changeset} -> :ok
-      end)
-    end)
   end
 
   defp format_added_items([item]) do

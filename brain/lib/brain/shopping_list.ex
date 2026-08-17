@@ -13,6 +13,12 @@ defmodule Brain.ShoppingList do
   alias Brain.Repo
   alias Brain.ShoppingList.Item
 
+  defp escape_ilike(term) do
+    term
+    |> String.replace("%", "\\%")
+    |> String.replace("_", "\\_")
+  end
+
   def add("", _group_id, _sender) do
     {:reply, "[BOT] Por favor especifica o item a adicionar, ex: 'adiciona leite'."}
   end
@@ -33,13 +39,14 @@ defmodule Brain.ShoppingList do
 
   def remove(search_term, group_id) do
     cleaned = Brain.Text.strip_leading_articles(search_term)
+    escaped = escape_ilike(cleaned)
 
     if cleaned == "" do
       {:reply, "[BOT] Por favor especifica o item a remover, ex: 'remove leite'."}
     else
       query =
         from(i in Item,
-          where: i.done == false and i.group_id == ^group_id and ilike(i.name, ^"%#{cleaned}%"),
+          where: i.done == false and i.group_id == ^group_id and ilike(i.name, ^"%#{escaped}%"),
           order_by: [desc: i.inserted_at],
           limit: 1
         )
@@ -101,28 +108,27 @@ defmodule Brain.ShoppingList do
   end
 
   defp insert_items(item_names, group_id, sender) do
-    inserted_items =
-      Enum.map(item_names, fn name ->
+    multi =
+      Enum.reduce(item_names, Ecto.Multi.new(), fn name, acc ->
         changeset = Item.changeset(%Item{}, %{name: name, added_by: sender, group_id: group_id})
-        Repo.insert(changeset)
+        safe_key = String.replace(name, ~r/[^a-zA-Z0-9_]/, "_")
+        Ecto.Multi.insert(acc, :"item_#{safe_key}", changeset)
       end)
 
-    if Enum.all?(inserted_items, &match?({:ok, _item}, &1)) do
-      items = Enum.map(inserted_items, fn {:ok, item} -> item end)
-      {:reply, format_added_items(items)}
-    else
-      rollback_inserted_items(inserted_items)
-      {:reply, add_error_message(item_names)}
+    case Repo.transaction(multi) do
+      {:ok, results} ->
+        items = Enum.map(results, fn {_key, item} -> item end)
+        # Preserve the original order from the input names
+        ordered_items =
+          Enum.flat_map(item_names, fn name ->
+            Enum.filter(items, &(&1.name == name))
+          end)
+
+        {:reply, format_added_items(ordered_items)}
+
+      {:error, _key, _result, _changes} ->
+        {:reply, add_error_message(item_names)}
     end
-  end
-
-  defp rollback_inserted_items(inserted_items) do
-    Repo.transaction(fn ->
-      Enum.each(inserted_items, fn
-        {:ok, item} -> Repo.delete(item)
-        {:error, _changeset} -> :ok
-      end)
-    end)
   end
 
   defp add_error_message([_item]),

@@ -9,9 +9,6 @@ defmodule BrainWeb.WebhookControllerTest do
 
   test "POST /webhook/whatsapp returns 401 when WEBHOOK_SECRET is set and header is missing",
        %{conn: conn} do
-    original = Application.get_env(:brain, :webhook_secret)
-    Application.put_env(:brain, :webhook_secret, "test-secret")
-
     payload = %{
       "group_id" => @group_id,
       "sender" => "67890@s.whatsapp.net",
@@ -20,16 +17,11 @@ defmodule BrainWeb.WebhookControllerTest do
 
     conn = post(conn, ~p"/webhook/whatsapp", payload)
     assert json_response(conn, 401)
-
-    Application.put_env(:brain, :webhook_secret, original)
   end
 
   test "POST /webhook/whatsapp succeeds when WEBHOOK_SECRET is set and header matches",
        %{conn: conn} do
     activate_group(@group_id)
-
-    original = Application.get_env(:brain, :webhook_secret)
-    Application.put_env(:brain, :webhook_secret, "test-secret")
 
     payload = %{
       "group_id" => @group_id,
@@ -44,8 +36,6 @@ defmodule BrainWeb.WebhookControllerTest do
 
     assert json_response(conn, 200) == %{"status" => "ok"}
     assert length(Brain.Repo.all(Brain.ShoppingList.Item)) == 1
-
-    Application.put_env(:brain, :webhook_secret, original)
   end
 
   test "POST /webhook/whatsapp sends intro reply and does not process commands for unknown groups",
@@ -56,10 +46,14 @@ defmodule BrainWeb.WebhookControllerTest do
       "text" => "adiciona leite"
     }
 
-    conn = post(conn, ~p"/webhook/whatsapp", payload)
+    conn =
+      conn
+      |> put_req_header("x-webhook-token", "test-secret")
+      |> post(~p"/webhook/whatsapp", payload)
+
     assert json_response(conn, 200) == %{"status" => "ok"}
 
-    assert Brain.Repo.get(Brain.Groups.Group, "unknown_group").status == "pending"
+    assert Brain.Repo.get(Brain.Groups.Group, "unknown_group").status == "waiting_approval"
     assert Brain.Repo.all(Brain.ShoppingList.Item) == []
   end
 
@@ -72,7 +66,11 @@ defmodule BrainWeb.WebhookControllerTest do
       "text" => "Olá mundo"
     }
 
-    conn = post(conn, ~p"/webhook/whatsapp", payload)
+    conn =
+      conn
+      |> put_req_header("x-webhook-token", "test-secret")
+      |> post(~p"/webhook/whatsapp", payload)
+
     assert json_response(conn, 200) == %{"status" => "ok"}
   end
 
@@ -87,7 +85,11 @@ defmodule BrainWeb.WebhookControllerTest do
       "from_me" => true
     }
 
-    conn = post(conn, ~p"/webhook/whatsapp", payload)
+    conn =
+      conn
+      |> put_req_header("x-webhook-token", "test-secret")
+      |> post(~p"/webhook/whatsapp", payload)
+
     assert json_response(conn, 200) == %{"status" => "ok"}
     assert length(Brain.Repo.all(Brain.ShoppingList.Item)) == 1
   end
@@ -104,7 +106,11 @@ defmodule BrainWeb.WebhookControllerTest do
       "from_me" => true
     }
 
-    conn = post(conn, ~p"/webhook/whatsapp", payload)
+    conn =
+      conn
+      |> put_req_header("x-webhook-token", "test-secret")
+      |> post(~p"/webhook/whatsapp", payload)
+
     assert json_response(conn, 200) == %{"status" => "ok"}
     assert Brain.Repo.all(Brain.ShoppingList.Item) == []
   end
@@ -118,7 +124,11 @@ defmodule BrainWeb.WebhookControllerTest do
       "text" => "adiciona leite"
     }
 
-    conn = post(conn, ~p"/webhook/whatsapp", payload)
+    conn =
+      conn
+      |> put_req_header("x-webhook-token", "test-secret")
+      |> post(~p"/webhook/whatsapp", payload)
+
     assert json_response(conn, 200) == %{"status" => "ok"}
     assert length(Brain.Repo.all(Brain.ShoppingList.Item)) == 1
   end
@@ -132,7 +142,11 @@ defmodule BrainWeb.WebhookControllerTest do
       "text" => "lembrar de pagar scouts daqui a 3 dias"
     }
 
-    conn = post(conn, ~p"/webhook/whatsapp", payload)
+    conn =
+      conn
+      |> put_req_header("x-webhook-token", "test-secret")
+      |> post(~p"/webhook/whatsapp", payload)
+
     assert json_response(conn, 200) == %{"status" => "ok"}
 
     [reminder] = Brain.Repo.all(Brain.Reminders.Reminder)
@@ -153,11 +167,17 @@ defmodule BrainWeb.WebhookControllerTest do
       }
     }
 
-    conn = post(conn, ~p"/webhook/whatsapp", payload)
+    conn =
+      conn
+      |> put_req_header("x-webhook-token", "test-secret")
+      |> post(~p"/webhook/whatsapp", payload)
+
     assert json_response(conn, 200) == %{"status" => "ok"}
   end
 
   defp activate_group(group_id) do
+    Brain.Groups.register_pending(group_id)
+    Brain.Groups.add_admin(group_id, "67890@s.whatsapp.net")
     Brain.Groups.activate(group_id)
   end
 end

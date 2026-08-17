@@ -2,4 +2,16 @@ _build
 deps
 .fetch
 *.ez
+.env*
+*.secret
 .DS_Store
+.git
+*.log
+node_modules
+*.secret.exs
+config/*.secret.exs
+priv/repo/migrations/*.exs
+test
+*.md
+!README.md
+!CHANGELOG.md

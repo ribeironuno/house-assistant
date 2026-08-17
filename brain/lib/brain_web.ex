@@ -23,9 +23,9 @@ defmodule BrainWeb do
     quote do
       use Phoenix.Router, helpers: false
 
-      # Import common connection and controller functions to use in pipelines
       import Plug.Conn
       import Phoenix.Controller
+      import Phoenix.LiveView.Router
     end
   end
 
@@ -42,6 +42,35 @@ defmodule BrainWeb do
       use Gettext, backend: BrainWeb.Gettext
 
       import Plug.Conn
+
+      unquote(verified_routes())
+    end
+  end
+
+  def live_view do
+    quote do
+      use Phoenix.LiveView,
+        layout: {BrainWeb.Layouts, :app}
+
+      unquote(verified_routes())
+    end
+  end
+
+  def live_component do
+    quote do
+      use Phoenix.LiveComponent
+
+      unquote(verified_routes())
+    end
+  end
+
+  def html do
+    quote do
+      use Phoenix.Component
+
+      import BrainWeb.Gettext
+
+      alias Phoenix.LiveView.JS
 
       unquote(verified_routes())
     end

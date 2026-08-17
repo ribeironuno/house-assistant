@@ -10,6 +10,23 @@ config :brain, Brain.Repo,
   pool: Ecto.Adapters.SQL.Sandbox,
   pool_size: System.schedulers_online() * 2
 
+# Oban configuration for test - use inline testing mode (overrides base config)
+config :brain, Oban,
+  name: Brain.Oban,
+  repo: Brain.Repo,
+  queues: [default: 1, commands: 1],
+  plugins: false,
+  testing: :inline
+
+# Set test webhook secret
+config :brain, webhook_secret: "test-secret"
+
+# Set test backoffice credentials (use a pre-computed bcrypt hash for "admin")
+# Generated with: Bcrypt.hash_pwd_salt("admin")
+config :brain,
+  backoffice_user: "admin",
+  backoffice_pass_hash: "$2b$12$m9ruaAOVthN89oCENu0ti.09XOji8ugSJAW6PqFFCGCk5YxuXT4zC"
+
 # We don't run a server during test. If one is required,
 # you can enable the server option below.
 config :brain, BrainWeb.Endpoint,

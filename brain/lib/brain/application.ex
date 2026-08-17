@@ -13,6 +13,7 @@ defmodule Brain.Application do
         Brain.Repo,
         {DNSCluster, query: Application.get_env(:brain, :dns_cluster_query) || :ignore},
         {Phoenix.PubSub, name: Brain.PubSub},
+        oban_child(),
         reminder_dispatcher_child(),
         # Start to serve requests, typically the last entry
         BrainWeb.Endpoint
@@ -31,6 +32,16 @@ defmodule Brain.Application do
   def config_change(changed, _new, removed) do
     BrainWeb.Endpoint.config_change(changed, removed)
     :ok
+  end
+
+  defp oban_child do
+    case Application.get_env(:brain, Oban) do
+      config when is_list(config) ->
+        {Oban, Keyword.merge(config, name: Brain.Oban)}
+
+      nil ->
+        {Oban, name: Brain.Oban}
+    end
   end
 
   defp reminder_dispatcher_child do

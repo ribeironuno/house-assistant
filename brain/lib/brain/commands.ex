@@ -10,6 +10,7 @@ defmodule Brain.Commands do
   alias Brain.Pantry
   alias Brain.Reminders
   alias Brain.ShoppingList
+  alias Brain.Groups
 
   @help_text """
              [BOT] Comandos que conheço:
@@ -67,7 +68,7 @@ defmodule Brain.Commands do
         route_non_clear(trimmed_raw, trimmed_lower, sender, group_id, llm_attempted?)
 
       scopes ->
-        clear_scopes_reply(group_id, scopes)
+        clear_scopes_reply(group_id, scopes, sender)
     end
   end
 
@@ -192,17 +193,21 @@ defmodule Brain.Commands do
   defp maybe_add_scope(scopes, true, scope), do: [scope | scopes]
   defp maybe_add_scope(scopes, _false, _scope), do: scopes
 
-  defp clear_scopes_reply(group_id, scopes) do
-    replies =
-      scopes
-      |> Enum.sort()
-      |> Enum.map(fn
-        :shopping -> ShoppingList.clear(group_id)
-        :pantry -> Pantry.clear(group_id)
-        :reminders -> Reminders.clear(group_id)
-      end)
+  defp clear_scopes_reply(group_id, scopes, sender) do
+    if Groups.is_admin?(group_id, sender) do
+      replies =
+        scopes
+        |> Enum.sort()
+        |> Enum.map(fn
+          :shopping -> ShoppingList.clear(group_id)
+          :pantry -> Pantry.clear(group_id)
+          :reminders -> Reminders.clear(group_id)
+        end)
 
-    {:reply, Enum.join(Enum.map(replies, fn {:reply, text} -> text end), "\n")}
+      {:reply, Enum.join(Enum.map(replies, fn {:reply, text} -> text end), "\n")}
+    else
+      {:reply, "[BOT] 🚫 Apenas administradores podem executar esta ação."}
+    end
   end
 
   defp reminder_command?(trimmed_lower) do

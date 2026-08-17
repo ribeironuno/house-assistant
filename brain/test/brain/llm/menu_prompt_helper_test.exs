@@ -53,24 +53,24 @@ defmodule Brain.LLM.MenuPromptHelperTest do
     constraints = "só de carne"
     preferences = %{likes: ["Tapioca"], dislikes: []}
 
-    {system_prompt, _user_prompt} =
+    {system_prompt, user_prompt} =
       build(pantry: pantry, history: history, constraints: constraints, preferences: preferences)
 
     refute system_prompt =~ "atum"
     refute system_prompt =~ "Arroz de tamboril"
     refute system_prompt =~ "Tapioca"
 
-    # Constraints ARE expected in the system prompt (user-supplied hard rules).
-    assert system_prompt =~ "só de carne"
+    # Constraints are in the user prompt (user-supplied data)
+    assert user_prompt =~ "só de carne"
   end
 
   test "build caps constraints to 500 characters" do
     long_constraints = String.duplicate("a", 600)
 
-    {system_prompt, _user_prompt} = build(constraints: long_constraints)
+    {_system_prompt, user_prompt} = build(constraints: long_constraints)
 
-    assert system_prompt =~ String.duplicate("a", 500)
-    refute system_prompt =~ String.duplicate("a", 501)
+    assert user_prompt =~ String.duplicate("a", 500)
+    refute user_prompt =~ String.duplicate("a", 501)
   end
 
   test "build anchors the menu start date to tomorrow in the system prompt" do

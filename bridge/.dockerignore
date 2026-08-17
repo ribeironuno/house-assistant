@@ -1,5 +1,12 @@
 node_modules
 npm-debug.log*
 auth_info_baileys
+.wwebjs_auth
+.wwebjs_cache
 .DS_Store
 .git
+*.log
+*.md
+!README.md
+.env*
+*.secret
