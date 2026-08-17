@@ -7,9 +7,35 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: house_assistant_dev
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  brain:
+    build: ./brain
+    container_name: whatsapp_brain
+    ports:
+      - "127.0.0.1:4000:4000"
+    environment:
+      - PORT=4000
+      - MIX_ENV=prod
+      - DATABASE_URL=ecto://postgres:postgres@db:5432/house_assistant_dev
+      - SECRET_KEY_BASE=${SECRET_KEY_BASE}
+      - PHX_SERVER=true
+      - BRIDGE_SEND_URL=${BRIDGE_SEND_URL:-http://bridge:3000/send}
+      - BRIDGE_LEAVE_URL=${BRIDGE_LEAVE_URL:-http://bridge:3000/leave}
+      - BRIDGE_AUTH_TOKEN=${BRIDGE_AUTH_TOKEN:-}
+      - WEBHOOK_SECRET=${WEBHOOK_SECRET:-}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+    depends_on:
+      db:
+        condition: service_healthy
     restart: unless-stopped
 
   bridge:
@@ -24,23 +50,8 @@ services:
       - WEBHOOK_SECRET=${WEBHOOK_SECRET:-}
     volumes:
       - baileys_auth:/app/.wwebjs_auth
-    restart: unless-stopped
-
-  brain:
-    build: ./brain
-    container_name: whatsapp_brain
-    ports:
-      - "127.0.0.1:4000:4000"
-    environment:
-      - PORT=4000
-      - BRIDGE_SEND_URL=${BRIDGE_SEND_URL:-http://bridge:3000/send}
-      - BRIDGE_LEAVE_URL=${BRIDGE_LEAVE_URL:-http://bridge:3000/leave}
-      - BRIDGE_AUTH_TOKEN=${BRIDGE_AUTH_TOKEN:-}
-      - WEBHOOK_SECRET=${WEBHOOK_SECRET:-}
-      - DATABASE_URL=ecto://postgres:postgres@db:5432/house_assistant_dev
-      - PHX_SERVER=true
     depends_on:
-      - db
+      - brain
     restart: unless-stopped
 
 volumes:

@@ -1,23 +1,25 @@
-FROM elixir:1.18-alpine
+FROM elixir:1.18-alpine AS builder
 
 RUN apk add --no-cache build-base git
 
 WORKDIR /app
 
-RUN mix local.hex --force && \
-    mix local.rebar --force
+ENV MIX_ENV=prod
+
+RUN mix local.hex --force && mix local.rebar --force
 
 COPY mix.exs mix.lock ./
-RUN mix deps.get && mix deps.compile
+RUN mix deps.get --only prod && mix deps.compile
 
-COPY config ./config
-COPY lib ./lib
-COPY priv ./priv
+COPY config config
+COPY lib lib
+COPY priv priv
+
+RUN mix compile
 
 EXPOSE 4000
 
 ENV PORT=4000
-ENV MIX_ENV=dev
 ENV PHX_SERVER=true
 
-CMD ["sh", "-c", "mix ecto.setup && mix phx.server"]
+CMD ["sh", "-c", "mix ecto.migrate && mix phx.server"]
