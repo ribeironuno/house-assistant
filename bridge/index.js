@@ -5,14 +5,9 @@
  * Loop prevention via isBridgeSelfMessage().
  */
 
-import { config } from "dotenv";
-import { dirname } from "path";
-import { fileURLToPath } from "url";
-
-config({ path: `${dirname(fileURLToPath(import.meta.url))}/.env` });
-
 import qrcode from "qrcode-terminal";
 import pkg from "whatsapp-web.js";
+import "./load-env.js";
 
 import { BRIDGE_AUTH_TOKEN, PORT } from "./src/config.js";
 import { handleGroupJoin, handleIncomingMessage } from "./src/handler.js";

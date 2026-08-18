@@ -41,7 +41,7 @@ config :brain, Oban,
   repo: Brain.Repo,
   queues: [default: 10, commands: 5],
   plugins: [
-    {Oban.Plugins.Pruner, max_age: {14, :days}, max_len: 1000},
+    {Oban.Plugins.Pruner, max_age: 60 * 60 * 14},
     Oban.Plugins.DynamicQueues
   ]
 
