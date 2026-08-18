@@ -1,22 +1,17 @@
 /**
  * Bridge — WhatsApp ↔ Brain HTTP gateway
  *
- * Responsibilities:
- *   - Maintain a WhatsApp Web session via whatsapp-web.js.
- *   - Forward incoming group messages to the Elixir brain via POST /webhook/whatsapp.
- *   - Expose POST /send so the brain can push replies back to the group.
- *   - Expose POST /leave so the brain can ask the bridge to leave a group.
- *   - Detect when the bot is added to a group (group_join) and notify the brain.
- *   - Prevent echo loops: because the bridge and the owner's phone share the same
- *     WhatsApp account, every bot reply also fires a message_create event.
- *     Loop prevention is handled by isBridgeSelfMessage() — see loop-prevention.js.
- *
- * Environment variables:
- *   PORT              — HTTP port (default: 3000)
- *   ELIXIR_WEBHOOK_URL — Brain webhook URL (default: http://localhost:4000/webhook/whatsapp)
- *   BRIDGE_AUTH_TOKEN — Shared secret for /send, /leave, and /health (empty = no auth, dev only)
- *   WEBHOOK_SECRET    — Shared secret forwarded as x-webhook-token to the brain webhook
+ * Maintains WhatsApp session, forwards messages to brain, and exposes /send and /leave.
+ * Loop prevention via isBridgeSelfMessage().
  */
+
+import { config } from "dotenv";
+import { fileURLToPath } from "url";
+import { dirname, join } from "path";
+
+// Load .env from project root
+const __dirname = dirname(fileURLToPath(import.meta.url));
+config({ path: join(__dirname, "..", ".env") });
 
 import qrcode from "qrcode-terminal";
 import pkg from "whatsapp-web.js";
@@ -74,10 +69,9 @@ client.on("disconnected", (reason) => {
   );
   isConnected = false;
 
-  // whatsapp-web.js cannot re-initialize a disconnected client. Exit so the
-  // process manager (Docker restart: unless-stopped) brings it back with a
-  // fresh session.
-  console.error("[Bridge] Restarting in 5 seconds to recover the WhatsApp session...");
+  console.error(
+    "[Bridge] Restarting in 5 seconds to recover the WhatsApp session...",
+  );
   setTimeout(() => process.exit(1), 5_000);
 });
 

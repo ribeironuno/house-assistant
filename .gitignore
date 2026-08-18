@@ -14,3 +14,4 @@ brain/_build/
 brain/deps/
 brain/*.ez
 erl_crash.dump
+bridge/package-lock.json

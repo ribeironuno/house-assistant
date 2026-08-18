@@ -3,9 +3,6 @@ defmodule Brain.Pantry do
   Pantry context.
 
   Owns persistence and Portuguese responses for pantry commands.
-
-  Every item is scoped to the WhatsApp group that created it (`group_id`),
-  so each group sees only its own pantry.
   """
 
   import Ecto.Query
@@ -30,10 +27,6 @@ defmodule Brain.Pantry do
     end
   end
 
-  @doc """
-  Inserts multiple pantry items, returning the inserted structs.
-  Rolls back all inserts if any fails. Returns `{:ok, items}` or `{:error, :insert_failed}`.
-  """
   def add_many_models(names, group_id, added_by) when is_list(names) do
     multi =
       Enum.reduce(names, Ecto.Multi.new(), fn name, acc ->

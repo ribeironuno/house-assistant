@@ -1,15 +1,7 @@
 defmodule Brain.LLM.PromptHelper do
   @moduledoc """
-  Builds the classification system prompt with the current date/time injected,
+  Builds the classification system prompt with current date/time injected
   so the LLM can resolve relative time expressions deterministically.
-
-  The output schema is intentionally scoped to match `Brain.Commands`:
-  - add/remove operate on a single item (no batching).
-  - `datetime` must always carry an explicit UTC offset, since reminders are
-    stored in UTC (see `Brain.Commands.create_reminder/4`) and the interpreter
-    needs an unambiguous value to convert, not a naive local timestamp.
-  - `help` is deliberately NOT listed as a supported action: Brain.Commands
-    has no branch for it. Unsupported actions must classify as `ignore`.
   """
 
   @timezone "Europe/Lisbon"

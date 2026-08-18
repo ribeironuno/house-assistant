@@ -1,18 +1,13 @@
 import { ELIXIR_WEBHOOK_URL, WEBHOOK_SECRET } from "./config.js";
 import { isBridgeSelfMessage } from "./loop-prevention.js";
 
-// Phoenix's default 8 MB body limit — stay comfortably below it for base64 media.
-export const MAX_MEDIA_BASE64 = 5_500_000; // ~4 MB original image
+export const MAX_MEDIA_BASE64 = 5_500_000;
 
 const WEBHOOK_MAX_RETRIES = 3;
 const WEBHOOK_RETRY_DELAY_MS = 1_000;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/**
- * Headers for brain webhook POSTs. When a WEBHOOK_SECRET is configured the
- * brain requires it (see brain/lib/brain_web/router.ex verify_webhook_token).
- */
 function webhookHeaders() {
   const headers = { "Content-Type": "application/json" };
   if (WEBHOOK_SECRET) {
@@ -21,10 +16,6 @@ function webhookHeaders() {
   return headers;
 }
 
-/**
- * POSTs a payload to the brain webhook with retries. Returns the response on
- * success, or null when every attempt fails.
- */
 async function postToBrain(payload) {
   for (let attempt = 1; attempt <= WEBHOOK_MAX_RETRIES; attempt++) {
     try {
@@ -56,9 +47,6 @@ async function postToBrain(payload) {
   return null;
 }
 
-/**
- * Helper to retrieve the group name/subject from whatsapp-web.js.
- */
 async function getGroupName(client, msgOrNotif, groupId) {
   try {
     if (msgOrNotif && typeof msgOrNotif.getChat === "function") {
@@ -90,12 +78,8 @@ async function getGroupName(client, msgOrNotif, groupId) {
 /**
  * Handles every message_create event from WhatsApp.
  *
- * Flow:
- *   1. Drop empty messages.
- *   2. Drop messages identified as bot echoes (loop prevention).
- *   3. Resolve the real group JID; only group messages (@g.us) are forwarded.
- *   4. Forward the message payload to the Elixir brain (which decides, per
- *      group, whether to introduce itself, gate activation, or process commands).
+ * Drops empty messages, bot echoes, and non-group messages.
+ * Forwards group messages to the Elixir brain webhook.
  */
 export async function handleIncomingMessage(client, message) {
   if (!message.body && !message.hasMedia) return;
@@ -107,8 +91,6 @@ export async function handleIncomingMessage(client, message) {
 
   const groupId = message.fromMe ? message.to : message.from;
 
-  // Multi-group: the brain handles activation per group. Only forward
-  // group chats (private 1:1 messages are not supported).
   if (!groupId || !groupId.endsWith("@g.us")) {
     return;
   }
@@ -137,7 +119,7 @@ export async function handleIncomingMessage(client, message) {
 
         mediaData = {
           mimetype: messageMedia.mimetype,
-          data: messageMedia.data, // already base64-encoded by whatsapp-web.js
+          data: messageMedia.data,
           filename: messageMedia.filename || null,
         };
         console.log(
@@ -177,16 +159,18 @@ export async function handleIncomingMessage(client, message) {
   });
 
   if (!response) {
-    console.error("[Bridge] Webhook failed after all retries — no message sent to group");
+    console.error(
+      "[Bridge] Webhook failed after all retries — no message sent to group",
+    );
   }
 }
 
 /**
- * Handles a group_join notification. When the bot itself was added to a
- * group, the brain is notified so it can introduce itself.
+ * Handles group_join notification when bot is added to a group.
+ * Notifies the brain so it can introduce itself.
  *
- * @param {object} client - The whatsapp-web.js Client instance.
- * @param {object} notification - A GroupNotification object.
+ * @param {object} client - whatsapp-web.js Client instance
+ * @param {object} notification - GroupNotification object
  */
 export async function handleGroupJoin(client, notification) {
   const recipients = notification?.recipientIds || [];

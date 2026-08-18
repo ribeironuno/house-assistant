@@ -3,9 +3,6 @@ defmodule Brain.ShoppingList do
   Shopping-list context.
 
   Owns parsing, persistence, and Portuguese responses for shopping commands.
-
-  Every item is scoped to the WhatsApp group that created it (`group_id`),
-  so each group sees only its own list.
   """
 
   import Ecto.Query

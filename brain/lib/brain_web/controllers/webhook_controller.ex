@@ -7,33 +7,25 @@ defmodule BrainWeb.WebhookController do
   alias Brain.Workers.CommandWorker
 
   @moduledoc """
-  Receives incoming WhatsApp events forwarded by the Bridge and dispatches
-  them to `Brain.Workers.CommandWorker` for async processing.
+  Receives WhatsApp events from the Bridge and dispatches to CommandWorker.
 
-  ## Webhook payload (POST /webhook/whatsapp)
-
-      %{
-        "event"    => "group_join",            # optional: bot added to a group
-        "group_id" => "<group JID>",
-        "sender"   => "<sender JID>",
-        "text"     => "<message body>",
-        "media"    => %{"data" => ..., "mimetype" => ...},  # optional
-        "from_me"  => true | false,
-        "timestamp" => <unix ts>,
-        "message_id" => "<whatsapp message id>"  # for idempotency
-      }
-
-  Every incoming message is first gated by `Brain.Groups`: groups must opt in
-  ("sim") before the bot processes commands. Loop prevention for bot echoes is
-  handled via the `[BOT]` prefix check in `Brain.Commands`.
+  Webhook payload (POST /webhook/whatsapp):
+    %{
+      "event"    => "group_join",            # optional: bot added to a group
+      "group_id" => "<group JID>",
+      "sender"   => "<sender JID>",
+      "text"     => "<message body>",
+      "media"    => %{"data" => ..., "mimetype" => ...},  # optional
+      "from_me"  => true | false,
+      "timestamp" => <unix ts>,
+      "message_id" => "<whatsapp message id>"  # for idempotency
+    }
   """
 
   @doc """
   Entry point for bridge webhook events.
-
-  Handles `group_join` events (bot added to a group), incoming messages with
-  media (invoices/receipts), and plain text messages. Malformed payloads that
-  don't match the expected shape are ignored.
+  Handles group_join, media (invoices/receipts), and plain text messages.
+  Malformed payloads are ignored.
   """
   def create(conn, params)
 

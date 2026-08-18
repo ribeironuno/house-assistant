@@ -171,7 +171,6 @@ defmodule Brain.Reminders do
   defp validate_hour(hour) when hour in 0..23, do: :ok
   defp validate_hour(_hour), do: {:error, :invalid_hour}
 
-  @doc false
   defp next_weekday(now, target_day, hour, minute) do
     now_lisbon = DateTime.shift_zone!(now, @lisbon_tz)
     current_dow = Date.day_of_week(now_lisbon)
@@ -187,7 +186,6 @@ defmodule Brain.Reminders do
     |> DateTime.shift_zone!("Etc/UTC")
   end
 
-  @doc false
   defp next_clock_time(now, hour, minute, opts) do
     days_ahead = opts[:days_ahead] || 0
     now_lisbon = DateTime.shift_zone!(now, @lisbon_tz)

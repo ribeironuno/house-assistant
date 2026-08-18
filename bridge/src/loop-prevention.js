@@ -16,11 +16,8 @@ export function registerSentMessage(sentMsg, text) {
 
 /**
  * Returns true if the message was sent by the bot itself and should be
- * discarded to avoid an infinite reply loop.
- *
- * The `[BOT]` prefix is the only reliable loop-prevention marker — every
- * bot reply uses it. The sent-message ID cache is kept as a secondary
- * guard for messages sent through the /send endpoint.
+ * discarded to avoid an infinite reply loop. The `[BOT]` prefix is the
+ * only reliable loop-prevention marker.
  */
 export function isBridgeSelfMessage(message) {
   const body = message.body ? message.body.trim() : "";

@@ -1,15 +1,9 @@
 defmodule Brain.LLM.MenuPromptHelper do
   @moduledoc """
-  Builds the system and user prompts for weekly dinner menu generation.
+  Builds system and user prompts for weekly dinner menu generation.
 
-  Unlike the lightweight classification prompt in `Brain.LLM.PromptHelper`,
-  this prompt receives heavy context (full pantry, meal history, learned
-  preferences) and is only invoked when the classifier resolves to
-  `generate_menu`.
-
-  User-controlled data (pantry names, meal history, constraints) is kept in
-  the user message, never in the system prompt, to defend against prompt
-  injection. All user input is sanitized to prevent injection attacks.
+  User-controlled data is kept in the user message, never in the system prompt,
+  to defend against prompt injection. All user input is sanitized.
   """
 
   @timezone "Europe/Lisbon"

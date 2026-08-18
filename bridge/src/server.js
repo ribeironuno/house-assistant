@@ -14,12 +14,12 @@ function timingSafeEqual(a, b) {
 }
 
 /**
- * Creates the Express HTTP server with health check, send, and leave endpoints.
+ * Creates Express HTTP server with health check, send, and leave endpoints.
  *
- * @param {object} client - The whatsapp-web.js Client instance.
- * @param {function} isConnectedFn - Returns current connection state.
+ * @param {object} client - whatsapp-web.js Client instance
+ * @param {function} isConnectedFn - returns current connection state
  * @param {object} options
- * @param {string} options.authToken - Shared secret for /send and /leave (MUST be set in production).
+ * @param {string} options.authToken - shared secret for /send and /leave
  * @returns {import("express").Express}
  */
 export function createServer(client, isConnectedFn, { authToken }) {
@@ -57,7 +57,7 @@ export function createServer(client, isConnectedFn, { authToken }) {
   // ---------------------------------------------------------------------------
   // POST /send — send a WhatsApp message to any group.
   // ---------------------------------------------------------------------------
-  app.post("/send", requireToken, (req, res, next) => {
+  app.post("/send", requireToken, async (req, res) => {
     const { to, text } = req.body;
 
     if (!to || !to.endsWith("@g.us") || typeof text !== "string" || !text) {
@@ -70,16 +70,13 @@ export function createServer(client, isConnectedFn, { authToken }) {
       return res.status(503).json({ error: "WhatsApp not connected" });
     }
 
-    next();
-  });
-
-  app.post("/send", async (req, res) => {
-    const { to, text } = req.body;
-
     try {
       const sentMsg = await client.sendMessage(to, text);
+
       registerSentMessage(sentMsg, text);
+
       console.log(`[Bridge] Sent message to [${to}]: "${text}"`);
+
       res.json({ status: "ok" });
     } catch (err) {
       console.error("[Bridge] Error in sendMessage:", err);

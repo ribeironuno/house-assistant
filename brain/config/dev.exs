@@ -50,6 +50,11 @@ config :brain, BrainWeb.Endpoint,
 # configured to run both http and https servers on
 # different ports.
 
+# Webhook and bridge auth secrets (loaded from .env or environment)
+config :brain,
+  webhook_secret: System.get_env("WEBHOOK_SECRET"),
+  bridge_auth_token: System.get_env("BRIDGE_AUTH_TOKEN")
+
 # Enable dev routes for dashboard and mailbox
 config :brain, dev_routes: true
 

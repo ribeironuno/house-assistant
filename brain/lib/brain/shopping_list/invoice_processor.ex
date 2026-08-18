@@ -35,6 +35,9 @@ defmodule Brain.ShoppingList.InvoiceProcessor do
   4. Retorne a lista de produtos no campo JSON `purchased_items`.
   """
 
+  @min_match_length 4
+  @stop_words ~w(de do da dos das e em para com sem por ou)
+
   @doc """
   Processes an incoming image media object and returns `{:reply, text}` or `:ignore`.
   """
@@ -79,11 +82,14 @@ defmodule Brain.ShoppingList.InvoiceProcessor do
 
   defp provider, do: Application.get_env(:brain, :llm_provider, Brain.LLM.Providers.Gemini)
 
+  defp provider_supports?(fun, arity) do
+    Code.ensure_loaded?(provider()) and function_exported?(provider(), fun, arity)
+  end
+
   defp call_vision_provider(media) do
     user_prompt = "Por favor analisa esta fatura/recibo e extrai a lista de produtos comprados."
 
-    if Code.ensure_loaded?(provider()) and
-         function_exported?(provider(), :generate_structured_with_media, 4) do
+    if provider_supports?(:generate_structured_with_media, 4) do
       provider().generate_structured_with_media(@system_prompt, user_prompt, @schema, media)
     else
       {:error, :media_not_supported_by_provider}
@@ -130,18 +136,20 @@ defmodule Brain.ShoppingList.InvoiceProcessor do
        ) do
     pantry_section = format_pantry_added(pantry_added)
 
-    if active_items == [] do
-      formatted_extracted = Enum.map_join(purchased_items, "\n", &"• #{&1}")
+    cond do
+      active_items == [] ->
+        formatted_extracted = Enum.map_join(purchased_items, "\n", &"• #{&1}")
 
-      {:reply,
-       "[BOT] 🧾 Fatura lida com sucesso!\n\n🛒 A tua lista de compras estava vazia, por isso nenhum item foi removido.\n\nProdutos na fatura:\n#{formatted_extracted}#{pantry_section}"}
-    else
-      if removed_db_items == [] do
+        {:reply,
+         "[BOT] 🧾 Fatura lida com sucesso!\n\n🛒 A tua lista de compras estava vazia, por isso nenhum item foi removido.\n\nProdutos na fatura:\n#{formatted_extracted}#{pantry_section}"}
+
+      removed_db_items == [] ->
         formatted_receipt = Enum.take(purchased_items, 5) |> Enum.join(", ")
 
         {:reply,
          "[BOT] 🧾 Fatura lida (#{formatted_receipt}), mas nenhum dos produtos comprados estava na tua lista de compras.#{pantry_section}"}
-      else
+
+      true ->
         removed_names = Enum.map(removed_db_items, & &1.name)
         formatted_removed = Enum.map_join(removed_names, "\n", &"• #{&1}")
 
@@ -157,7 +165,6 @@ defmodule Brain.ShoppingList.InvoiceProcessor do
           end
 
         {:reply, final_msg <> pantry_section}
-      end
     end
   end
 
@@ -201,33 +208,34 @@ defmodule Brain.ShoppingList.InvoiceProcessor do
     if unmatched_db == [] or unmatched_receipt == [] do
       {string_matched, unmatched_receipt}
     else
-      case llm_semantic_match(unmatched_db, unmatched_receipt) do
-        {:ok, additional_db_matches, matched_receipt_names} ->
-          # Enforce 1:1: LLM matches must not overlap with string matches
-          already_matched =
-            MapSet.new(string_matched, &normalize(&1.name))
-
-          additional_filtered =
-            Enum.reject(additional_db_matches, fn db_item ->
-              MapSet.member?(already_matched, normalize(db_item.name))
-            end)
-
-          final_matched = string_matched ++ additional_filtered
-
-          final_unmatched =
-            Enum.reject(unmatched_receipt, fn receipt_item ->
-              Enum.any?(matched_receipt_names, &(normalize(&1) == normalize(receipt_item)))
-            end)
-
-          {final_matched, final_unmatched}
-
-        :error ->
-          {string_matched, unmatched_receipt}
-      end
+      merge_with_semantic_matches(string_matched, unmatched_db, unmatched_receipt)
     end
   end
 
-  @min_match_length 4
+  # Calls the LLM for any items string matching couldn't resolve, then merges
+  # the result back in - filtering out anything that would double-match a DB
+  # item already claimed by string matching, to keep the overall match 1:1.
+  defp merge_with_semantic_matches(string_matched, unmatched_db, unmatched_receipt) do
+    case llm_semantic_match(unmatched_db, unmatched_receipt) do
+      {:ok, additional_db_matches, matched_receipt_names} ->
+        already_matched = MapSet.new(string_matched, &normalize(&1.name))
+
+        additional_filtered =
+          Enum.reject(additional_db_matches, fn db_item ->
+            MapSet.member?(already_matched, normalize(db_item.name))
+          end)
+
+        final_unmatched =
+          Enum.reject(unmatched_receipt, fn receipt_item ->
+            Enum.any?(matched_receipt_names, &(normalize(&1) == normalize(receipt_item)))
+          end)
+
+        {string_matched ++ additional_filtered, final_unmatched}
+
+      :error ->
+        {string_matched, unmatched_receipt}
+    end
+  end
 
   defp string_match(active_items, purchased_items) do
     # Greedy 1:1 matching: each receipt item claims at most one DB item.
@@ -291,8 +299,7 @@ defmodule Brain.ShoppingList.InvoiceProcessor do
       required: ["matches"]
     }
 
-    if Code.ensure_loaded?(provider()) and
-         function_exported?(provider(), :generate_structured, 3) do
+    if provider_supports?(:generate_structured, 3) do
       case provider().generate_structured(
              "Você é um assistente que identifica correspondências semânticas entre itens de supermercado em português.",
              prompt,
@@ -361,7 +368,8 @@ defmodule Brain.ShoppingList.InvoiceProcessor do
 
   def items_match?(_, _), do: false
 
-  @doc false
+  # True if one string is (at least half as long as, and fully contained in)
+  # the other - e.g. "leite" inside "leite meio gordo mimosa".
   defp substring_match?(a, b) do
     shorter = if String.length(a) <= String.length(b), do: a, else: b
     longer = if shorter == a, do: b, else: a
@@ -371,6 +379,10 @@ defmodule Brain.ShoppingList.InvoiceProcessor do
       String.length(shorter) / max(String.length(longer), 1) >= 0.5
   end
 
+  # True if the two strings share a significant word that, on its own, makes
+  # up at least half of whichever original string is longer - mirrors
+  # substring_match?/2's "shorter must be >= 50% of longer" ratio, just
+  # applied to a shared word instead of a shared substring.
   defp word_overlap?(a, b) do
     words_a = significant_words(a)
     words_b = significant_words(b)
@@ -378,15 +390,16 @@ defmodule Brain.ShoppingList.InvoiceProcessor do
     if words_a == [] or words_b == [] do
       false
     else
+      longer_length = max(String.length(a), String.length(b))
+
       Enum.any?(words_a, fn w ->
         String.length(w) >= @min_match_length and
           w in words_b and
-          String.length(w) / max(String.length(a), String.length(b)) >= 0.5
+          String.length(w) / longer_length >= 0.5
       end)
     end
   end
 
-  @stop_words ~w(de do da dos das e em para com sem por ou)
   defp significant_words(str) do
     String.split(str)
     |> Enum.reject(&(&1 in @stop_words))
