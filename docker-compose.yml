@@ -22,6 +22,7 @@ services:
     container_name: whatsapp_brain
     ports:
       - "127.0.0.1:4000:4000"
+    env_file: ./brain/.env
     environment:
       - PORT=4000
       - MIX_ENV=prod
@@ -30,9 +31,6 @@ services:
       - PHX_SERVER=true
       - BRIDGE_SEND_URL=${BRIDGE_SEND_URL:-http://bridge:3000/send}
       - BRIDGE_LEAVE_URL=${BRIDGE_LEAVE_URL:-http://bridge:3000/leave}
-      - BRIDGE_AUTH_TOKEN=${BRIDGE_AUTH_TOKEN:-}
-      - WEBHOOK_SECRET=${WEBHOOK_SECRET:-}
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
     depends_on:
       db:
         condition: service_healthy
@@ -43,11 +41,10 @@ services:
     container_name: whatsapp_bridge
     ports:
       - "127.0.0.1:3000:3000"
+    env_file: ./bridge/.env
     environment:
       - PORT=3000
       - ELIXIR_WEBHOOK_URL=${ELIXIR_WEBHOOK_URL:-http://brain:4000/webhook/whatsapp}
-      - BRIDGE_AUTH_TOKEN=${BRIDGE_AUTH_TOKEN:-}
-      - WEBHOOK_SECRET=${WEBHOOK_SECRET:-}
     volumes:
       - baileys_auth:/app/.wwebjs_auth
     depends_on:

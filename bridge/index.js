@@ -6,12 +6,10 @@
  */
 
 import { config } from "dotenv";
+import { dirname } from "path";
 import { fileURLToPath } from "url";
-import { dirname, join } from "path";
 
-// Load .env from project root
-const __dirname = dirname(fileURLToPath(import.meta.url));
-config({ path: join(__dirname, "..", ".env") });
+config({ path: `${dirname(fileURLToPath(import.meta.url))}/.env` });
 
 import qrcode from "qrcode-terminal";
 import pkg from "whatsapp-web.js";

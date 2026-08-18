@@ -1,4 +1,7 @@
 .env
+.env.*
+brain/.env
+bridge/.env
 .DS_Store
 
 # Node / Baileys
