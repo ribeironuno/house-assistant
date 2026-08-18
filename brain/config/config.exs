@@ -36,15 +36,6 @@ config :elixir, :time_zone_database, Tz.TimeZoneDatabase
 
 config :brain, llm_provider: Brain.LLM.Providers.Gemini
 
-# Oban configuration
-config :brain, Oban,
-  repo: Brain.Repo,
-  queues: [default: 10, commands: 5],
-  plugins: [
-    {Oban.Plugins.Pruner, max_age: 60 * 60 * 14},
-    Oban.Plugins.DynamicQueues
-  ]
-
 # Hammer rate limiting configuration
 config :hammer,
   backend: {Hammer.Backend.ETS, expiry_ms: 60_000 * 60 * 4, cleanup_interval_ms: 60_000 * 10}

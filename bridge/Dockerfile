@@ -22,10 +22,10 @@ COPY . .
 
 RUN groupadd -r nodeuser && useradd -r -g nodeuser nodeuser
 RUN chown -R nodeuser:nodeuser /app
-USER nodeuser
+
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
 EXPOSE 3000
 
-# Remove stale Chromium profile locks left behind by previous container runs.
-# whatsapp-web.js stores sessions in /app/.wwebjs_auth/{clientId}/ (mounted as a volume).
-CMD ["sh", "-c", "rm -f /app/.wwebjs_auth/*/SingletonLock /app/.wwebjs_auth/*/SingletonSocket /app/.wwebjs_auth/*/SingletonCookie && npm start"]
+ENTRYPOINT ["/entrypoint.sh"]

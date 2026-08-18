@@ -179,6 +179,9 @@ The Bridge must be running separately (`cd bridge && node index.js`).
 |---------|---------|-------------|
 | `GEMINI_API_KEY` | *(none, required)* | Google Gemini API key |
 | `GEMINI_MODEL` | `gemini-flash-latest` | Which Gemini model to use |
+| `SECRET_KEY_BASE` | *(none, required in prod)* | Phoenix secret for sessions/cookies (64+ bytes). Generate with `mix phx.gen.secret` |
+| `BACKOFFICE_USER` | *(none, required)* | Backoffice login username |
+| `BACKOFFICE_PASS_HASH` | *(none, required)* | Bcrypt hash of the backoffice password. Generate with `Bcrypt.hash_pwd_salt("your_password")` |
 | `llm_command_interpreter_enabled` | `true` | Enables/disables the LLM classifier |
 | `menu_planner_enabled` | `true` | Enables/disables menu generation |
 | `send_outgoing_messages` | `true` | Master switch for outgoing messages |

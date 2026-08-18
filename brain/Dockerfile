@@ -31,6 +31,10 @@ RUN chown -R app:app /app
 
 USER app
 
+ENV MIX_HOME=/app/.mix
+
+RUN mix local.hex --force && mix local.rebar --force
+
 EXPOSE 4000
 
 ENV PORT=4000

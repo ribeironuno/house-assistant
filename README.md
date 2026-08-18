@@ -240,8 +240,9 @@ Only Postgres runs in Docker. The bridge and brain run directly on your machine.
 ### 1. Configure
 
 ```bash
+cd brain
 cp .env.example .env
-export GEMINI_API_KEY=your_key
+# Edit .env and fill in GEMINI_API_KEY, SECRET_KEY_BASE, BACKOFFICE_USER, BACKOFFICE_PASS_HASH
 ```
 
 ### 2. Start Postgres
@@ -288,9 +289,10 @@ node index.js             # scan the QR code on first run
 | `BRIDGE_SEND_URL` | `http://localhost:3000/send` | Bridge endpoint for outgoing messages |
 | `BRIDGE_LEAVE_URL` | `http://localhost:3000/leave` | Bridge endpoint for leaving a group |
 | `DATABASE_URL` | *(from config)* | Postgres connection string |
+| `SECRET_KEY_BASE` | *(none, required in prod)* | Phoenix secret for sessions/cookies (64+ bytes). Generate with `mix phx.gen.secret` |
+| `BACKOFFICE_USER` | *(none, required)* | Backoffice login username |
+| `BACKOFFICE_PASS_HASH` | *(none, required)* | Bcrypt hash of the backoffice password. Generate with `Bcrypt.hash_pwd_salt("your_password")` |
 | `PHX_SERVER` | | Set to `true` in Docker to auto-start the server |
-
-Copy `.env.example` to `.env` and optionally set `BRIDGE_AUTH_TOKEN`.
 
 ---
 

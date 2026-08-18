@@ -3,11 +3,13 @@ defmodule BrainWeb.WebhookController do
   require Logger
 
   alias Brain.Groups
+  alias Brain.Commands
+  alias Brain.ProcessedMessage
+  alias Brain.Repo
   alias Brain.WhatsApp.BridgeClient
-  alias Brain.Workers.CommandWorker
 
   @moduledoc """
-  Receives WhatsApp events from the Bridge and dispatches to CommandWorker.
+  Receives WhatsApp events from the Bridge and processes commands inline.
 
   Webhook payload (POST /webhook/whatsapp):
     %{
@@ -115,19 +117,44 @@ defmodule BrainWeb.WebhookController do
   end
 
   defp enqueue_command(group_id, sender, message, message_type, media_base64, message_id) do
-    args = %{
-      "message_id" =>
-        message_id || "#{group_id}-#{sender}-#{DateTime.to_unix(DateTime.utc_now())}",
-      "payload" => %{
-        "group_id" => group_id,
-        "sender" => sender,
-        "message" => message,
-        "message_type" => message_type,
-        "media_base64" => media_base64,
-        "timestamp" => DateTime.to_unix(DateTime.utc_now())
-      }
-    }
+    message_id =
+      message_id || "#{group_id}-#{sender}-#{DateTime.to_unix(DateTime.utc_now())}"
 
-    Oban.insert(Brain.Oban, CommandWorker.new(args))
+    case Repo.insert(%ProcessedMessage{message_id: message_id}, on_conflict: :nothing) do
+      {:ok, _} ->
+        process_command(group_id, sender, message, message_type, media_base64)
+
+      {:error, _} ->
+        {:ok, :duplicate}
+    end
+  end
+
+  defp process_command(group_id, sender, message, _message_type, _media_base64) do
+    case Groups.get_group(group_id) do
+      %Groups.Group{status: "active"} = _group ->
+        case Commands.handle(message, sender, group_id) do
+          {:reply, reply_text} ->
+            BridgeClient.send_message(group_id, reply_text)
+            {:ok, :processed}
+
+          :ignore ->
+            {:ok, :ignored}
+        end
+
+      %Groups.Group{status: "pending"} = group ->
+        case Groups.handle_pending_activation(group.group_id, message) do
+          {:reply, reply_text} ->
+            BridgeClient.send_message(group_id, reply_text)
+            {:ok, :processed}
+
+          {:leave, reply_text} ->
+            BridgeClient.send_message(group_id, reply_text)
+            Groups.request_leave(group_id)
+            {:ok, :processed}
+        end
+
+      _ ->
+        {:ok, :ignored}
+    end
   end
 end

@@ -39,6 +39,14 @@ if bridge_auth_token = System.get_env("BRIDGE_AUTH_TOKEN") do
   config :brain, bridge_auth_token: bridge_auth_token
 end
 
+if backoffice_user = System.get_env("BACKOFFICE_USER") do
+  config :brain, backoffice_user: backoffice_user
+end
+
+if backoffice_pass_hash = System.get_env("BACKOFFICE_PASS_HASH") do
+  config :brain, backoffice_pass_hash: backoffice_pass_hash
+end
+
 if config_env() == :prod do
   secret_key_base =
     System.get_env("SECRET_KEY_BASE") ||
