@@ -41,9 +41,10 @@ processing are written in PT. There is no translation or multi-language support.
 
 ### LLM provider
 
-The only supported LLM is **Google Gemini** (Flash model, free tier). No other providers
-are supported. A `GEMINI_API_KEY` is required for the LLM features (classifier, receipt
-processing, menu generation) to work.
+The bot uses a **fallback chain** of LLM providers. By default it tries **Google Gemini**
+first; if Gemini times out or returns a server error, it automatically retries against
+**Groq**. Both `GEMINI_API_KEY` and `GROQ_API_KEY` are recommended so the fallback works.
+The provider chain is configurable via the `:llm_fallback_chain` application env.
 
 ### Group approval flow
 
@@ -68,7 +69,7 @@ per group (admins can run `limpar` commands that affect everyone's data).
 |---|---|
 | **Shopping list** | Add, remove, list and clear items with plain Portuguese commands |
 | **Reminders** | "lembrar de pagar scouts daqui a 3 dias" posts the reminder at the right time |
-| **Receipt photos** | Send a photo of a supermarket receipt, Gemini extracts the products, bought items are removed from the list and added to the pantry |
+| **Receipt photos** | Send a photo of a supermarket receipt, the LLM extracts the products, bought items are removed from the list and added to the pantry |
 | **Pantry** | Track what's at home ("tenho arroz, frango") |
 | **Weekly menu** | "faz-me o menu da semana" gives 7 days of dinner ideas and recipes, using your pantry and taste preferences |
 | **LLM fallback** | Any unrecognised message is classified by Gemini into one of 14 actions, so natural phrasing works |
@@ -108,7 +109,7 @@ for next week.
                                              v
                                   +---------------------------+
                                   |  Brain (Elixir / Phoenix) |
-                                  |  commands + LLM (Gemini)  |
+                                   |  commands + LLM (Gemini + Groq fallback)  |
                                   +------------+--------------+
                                              |  SQL (Ecto)
                                              v
@@ -122,7 +123,7 @@ for next week.
 | Service | Tech | Role |
 |---|---|---|
 | **Bridge** | Node.js + whatsapp-web.js | Speaks the WhatsApp Web protocol. Forwards incoming group messages to the Brain via `POST /webhook/whatsapp` and sends replies back via `POST /send`. No business logic. |
-| **Brain** | Elixir / Phoenix | Receives messages, classifies commands (rule-based first, LLM fallback), reads/writes Postgres, schedules reminders, calls Gemini for invoices/menus, and replies via the bridge. |
+| **Brain** | Elixir / Phoenix | Receives messages, classifies commands (rule-based first, LLM fallback), reads/writes Postgres, schedules reminders, calls Gemini/Groq for invoices/menus, and replies via the bridge. |
 | **DB** | PostgreSQL 16 | Stores shopping list, reminders, pantry, menus and meal feedback. Managed by Ecto migrations. |
 
 
@@ -230,6 +231,7 @@ No extra command is needed, just send the photo to the group.
 * [Docker Engine & Docker Compose](https://docs.docker.com/get-docker/)
 * [Elixir 1.15+](https://elixir-lang.org/) and [Node.js 20+](https://nodejs.org/) (dev mode only)
 * A [Google Gemini API key](https://aistudio.google.com/app/apikey) (free tier), required for the LLM features
+* A [Groq API key](https://console.groq.com/keys) (optional, recommended) — used as fallback when Gemini is down
 
 ---
 
@@ -242,7 +244,7 @@ Only Postgres runs in Docker. The bridge and brain run directly on your machine.
 ```bash
 cd brain
 cp .env.example .env
-# Edit .env and fill in GEMINI_API_KEY, SECRET_KEY_BASE, BACKOFFICE_USER, BACKOFFICE_PASS_HASH
+# Edit .env and fill in GEMINI_API_KEY, GROQ_API_KEY (optional), SECRET_KEY_BASE, BACKOFFICE_USER, BACKOFFICE_PASS_HASH
 ```
 
 ### 2. Start Postgres
@@ -286,6 +288,9 @@ node index.js             # scan the QR code on first run
 |---|---|---|
 | `GEMINI_API_KEY` | *(none, required)* | Google Gemini API key |
 | `GEMINI_MODEL` | `gemini-flash-latest` | Which Gemini model to use |
+| `GROQ_API_KEY` | *(none, recommended)* | Groq API key (fallback provider) |
+| `GROQ_MODEL` | `llama-3.3-70b-versatile` | Groq model for text classification |
+| `GROQ_VISION_MODEL` | `llama-4-scout-17b-16e-instruct` | Groq model for vision/receipt OCR |
 | `BRIDGE_SEND_URL` | `http://localhost:3000/send` | Bridge endpoint for outgoing messages |
 | `BRIDGE_LEAVE_URL` | `http://localhost:3000/leave` | Bridge endpoint for leaving a group |
 | `DATABASE_URL` | *(from config)* | Postgres connection string |

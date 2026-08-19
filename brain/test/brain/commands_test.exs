@@ -17,7 +17,7 @@ defmodule Brain.CommandsTest do
 
   test "adiciona command adds item to shopping list and returns confirmation" do
     assert {:reply, "[BOT] ✅ Adicionado: leite"} =
-             Commands.handle("adiciona leite", "user_1", @group_id)
+             Commands.handle("adiciona leite", "user_1", @group_id, true)
 
     items = Repo.all(Item)
     assert length(items) == 1
@@ -28,7 +28,7 @@ defmodule Brain.CommandsTest do
 
   test "adicionar command handles extra spaces and casing" do
     assert {:reply, "[BOT] ✅ Adicionado: Ovos Frescos"} =
-             Commands.handle("  ADICIONAR   Ovos Frescos  ", "user_2", @group_id)
+             Commands.handle("  ADICIONAR   Ovos Frescos  ", "user_2", @group_id, true)
 
     items = Repo.all(Item)
     assert length(items) == 1
@@ -37,7 +37,7 @@ defmodule Brain.CommandsTest do
 
   test "adicionar command adds multiple comma-separated items" do
     assert {:reply, "[BOT] ✅ Adicionados:\n1. leite\n2. pão\n3. manteiga"} =
-             Commands.handle("adicionar leite, pão, manteiga", "user_1", @group_id)
+             Commands.handle("adicionar leite, pão, manteiga", "user_1", @group_id, true)
 
     item_names =
       from(i in Item, order_by: [asc: i.inserted_at, asc: i.id])
@@ -49,7 +49,7 @@ defmodule Brain.CommandsTest do
 
   test "adicionar command ignores empty comma-separated entries" do
     assert {:reply, "[BOT] ✅ Adicionados:\n1. leite\n2. manteiga"} =
-             Commands.handle("adiciona leite, , manteiga, ", "user_1", @group_id)
+             Commands.handle("adiciona leite, , manteiga, ", "user_1", @group_id, true)
 
     item_names =
       from(i in Item, order_by: [asc: i.inserted_at, asc: i.id])
@@ -61,32 +61,32 @@ defmodule Brain.CommandsTest do
 
   test "add command without argument asks for item name" do
     assert {:reply, "[BOT] Por favor especifica o item a adicionar, ex: 'adiciona leite'."} =
-             Commands.handle("adiciona", "user_1", @group_id)
+             Commands.handle("adiciona", "user_1", @group_id, true)
   end
 
   test "add command with only commas asks for item name" do
     assert {:reply, "[BOT] Por favor especifica o item a adicionar, ex: 'adiciona leite'."} =
-             Commands.handle("adiciona , ,", "user_1", @group_id)
+             Commands.handle("adiciona , ,", "user_1", @group_id, true)
   end
 
   test "lista command shows items in order of insertion" do
     assert {:reply, "[BOT] 🛒 A tua lista de compras está vazia."} =
-             Commands.handle("lista", "user_1", @group_id)
+             Commands.handle("lista", "user_1", @group_id, true)
 
-    Commands.handle("adiciona leite", "user_1", @group_id)
-    Commands.handle("adiciona ovos", "user_2", @group_id)
+    Commands.handle("adiciona leite", "user_1", @group_id, true)
+    Commands.handle("adiciona ovos", "user_2", @group_id, true)
 
     expected_reply = "[BOT] 🛒 Lista de Compras:\n1. leite\n2. ovos"
-    assert {:reply, ^expected_reply} = Commands.handle("lista", "user_1", @group_id)
-    assert {:reply, ^expected_reply} = Commands.handle("ver lista", "user_1", @group_id)
+    assert {:reply, ^expected_reply} = Commands.handle("lista", "user_1", @group_id, true)
+    assert {:reply, ^expected_reply} = Commands.handle("ver lista", "user_1", @group_id, true)
   end
 
   test "remove command deletes matching item" do
-    Commands.handle("adiciona leite", "user_1", @group_id)
-    Commands.handle("adiciona ovos", "user_1", @group_id)
+    Commands.handle("adiciona leite", "user_1", @group_id, true)
+    Commands.handle("adiciona ovos", "user_1", @group_id, true)
 
     assert {:reply, "[BOT] 🗑️ Removido: leite"} =
-             Commands.handle("remove leite", "user_1", @group_id)
+             Commands.handle("remove leite", "user_1", @group_id, true)
 
     items = Repo.all(Item)
     assert length(items) == 1
@@ -94,68 +94,68 @@ defmodule Brain.CommandsTest do
   end
 
   test "remover command handles case-insensitive substring match" do
-    Commands.handle("adiciona Leite Gordo", "user_1", @group_id)
+    Commands.handle("adiciona Leite Gordo", "user_1", @group_id, true)
 
     assert {:reply, "[BOT] 🗑️ Removido: Leite Gordo"} =
-             Commands.handle("remover leite", "user_1", @group_id)
+             Commands.handle("remover leite", "user_1", @group_id, true)
 
     assert Repo.all(Item) == []
   end
 
   test "remove command handles non-existent item gracefully" do
     assert {:reply, "[BOT] O item 'manteiga' não foi encontrado na lista de compras."} =
-             Commands.handle("remove manteiga", "user_1", @group_id)
+             Commands.handle("remove manteiga", "user_1", @group_id, true)
   end
 
   test "limpar command deletes all shopping items" do
-    Commands.handle("adiciona leite", "user_1", @group_id)
-    Commands.handle("adiciona ovos", "user_1", @group_id)
+    Commands.handle("adiciona leite", "user_1", @group_id, true)
+    Commands.handle("adiciona ovos", "user_1", @group_id, true)
 
     assert {:reply, "[BOT] 🧹 Lista de compras limpa."} =
-             Commands.handle("limpar lista", "user_1", @group_id)
+             Commands.handle("limpar lista", "user_1", @group_id, true)
 
     assert Repo.all(Item) == []
   end
 
   test "limpar compras command deletes only the shopping list" do
-    Commands.handle("adiciona leite", "user_1", @group_id)
+    Commands.handle("adiciona leite", "user_1", @group_id, true)
     Brain.Pantry.add_many(["arroz"], @group_id, "user_1")
 
     assert {:reply, "[BOT] 🧹 Lista de compras limpa."} =
-             Commands.handle("limpar compras", "user_1", @group_id)
+             Commands.handle("limpar compras", "user_1", @group_id, true)
 
     assert Repo.all(Item) == []
     assert length(Repo.all(Brain.Pantry.Item)) == 1
   end
 
   test "limpar despensa command deletes only the pantry" do
-    Commands.handle("adiciona leite", "user_1", @group_id)
+    Commands.handle("adiciona leite", "user_1", @group_id, true)
     Brain.Pantry.add_many(["arroz", "atum"], @group_id, "user_1")
 
     assert {:reply, "[BOT] 🧹 Despensa limpa."} =
-             Commands.handle("limpar despensa", "user_1", @group_id)
+             Commands.handle("limpar despensa", "user_1", @group_id, true)
 
     assert length(Repo.all(Item)) == 1
     assert Repo.all(Brain.Pantry.Item) == []
   end
 
   test "limpar lembretes command deletes only reminders" do
-    Commands.handle("lembrar de pagar scouts amanhã", "user_1", @group_id)
-    Commands.handle("adiciona leite", "user_1", @group_id)
+    Commands.handle("lembrar de pagar scouts amanhã", "user_1", @group_id, true)
+    Commands.handle("adiciona leite", "user_1", @group_id, true)
 
     assert {:reply, "[BOT] 🔔 Lembretes apagados."} =
-             Commands.handle("limpar lembretes", "user_1", @group_id)
+             Commands.handle("limpar lembretes", "user_1", @group_id, true)
 
     assert Repo.all(Reminder) == []
     assert length(Repo.all(Item)) == 1
   end
 
   test "limpar tudo command clears shopping list, pantry, and reminders" do
-    Commands.handle("adiciona leite", "user_1", @group_id)
+    Commands.handle("adiciona leite", "user_1", @group_id, true)
     Brain.Pantry.add_many(["arroz"], @group_id, "user_1")
-    Commands.handle("lembrar de pagar scouts amanhã", "user_1", @group_id)
+    Commands.handle("lembrar de pagar scouts amanhã", "user_1", @group_id, true)
 
-    assert {:reply, reply} = Commands.handle("limpar tudo", "user_1", @group_id)
+    assert {:reply, reply} = Commands.handle("limpar tudo", "user_1", @group_id, true)
     assert reply =~ "Lista de compras limpa"
     assert reply =~ "Despensa limpa"
     assert reply =~ "Lembretes apagados"
@@ -167,26 +167,26 @@ defmodule Brain.CommandsTest do
 
   test "limpar tudo command clears data of the requesting group only" do
     ensure_group("group_2")
-    Commands.handle("adiciona leite", "user_1", @group_id)
-    Commands.handle("adiciona pão", "user_1", "group_2")
+    Commands.handle("adiciona leite", "user_1", @group_id, true)
+    Commands.handle("adiciona pão", "user_1", "group_2", true)
 
-    assert {:reply, _reply} = Commands.handle("limpar tudo", "user_1", @group_id)
+    assert {:reply, _reply} = Commands.handle("limpar tudo", "user_1", @group_id, true)
 
     assert Enum.map(Repo.all(Item), & &1.name) == ["pão"]
   end
 
   test "ambiguous clear phrases do not delete data (LLM decides)" do
-    Commands.handle("adiciona leite", "user_1", @group_id)
+    Commands.handle("adiciona leite", "user_1", @group_id, true)
 
-    assert :ignore = Commands.handle("apaga a luz", "user_1", @group_id)
-    assert :ignore = Commands.handle("limpa aí", "user_1", @group_id)
-    assert :ignore = Commands.handle("limpar", "user_1", @group_id)
+    assert :ignore = Commands.handle("apaga a luz", "user_1", @group_id, false)
+    assert :ignore = Commands.handle("limpa aí", "user_1", @group_id, false)
+    assert :ignore = Commands.handle("limpar", "user_1", @group_id, false)
 
     assert Enum.map(Repo.all(Item), & &1.name) == ["leite"]
   end
 
   test "ajuda command lists known commands" do
-    assert {:reply, reply} = Commands.handle("ajuda", "user_1", @group_id)
+    assert {:reply, reply} = Commands.handle("ajuda", "user_1", @group_id, true)
 
     assert reply =~ "[BOT] Comandos que conheço:"
     assert reply =~ "adiciona <item>"
@@ -201,14 +201,14 @@ defmodule Brain.CommandsTest do
     assert reply =~ "gostei de <prato>"
     assert reply =~ "lembrar de <tarefa> daqui a N minutos/horas/dias/semanas"
 
-    assert {:reply, ^reply} = Commands.handle("help", "user_1", @group_id)
-    assert {:reply, ^reply} = Commands.handle("comandos", "user_1", @group_id)
+    assert {:reply, ^reply} = Commands.handle("help", "user_1", @group_id, true)
+    assert {:reply, ^reply} = Commands.handle("comandos", "user_1", @group_id, true)
     assert Repo.all(Item) == []
     assert Repo.all(Reminder) == []
   end
 
   test "lembrar de command creates reminder for logo" do
-    assert {:reply, reply} = Commands.handle("lembrar de fazer isto logo", "user_1", "group_1")
+    assert {:reply, reply} = Commands.handle("lembrar de fazer isto logo", "user_1", "group_1", true)
     assert reply =~ "[BOT] 🔔 Lembrete guardado!"
     assert reply =~ "Título: fazer isto"
     assert reply =~ "Falta: 30 minutos"
@@ -223,7 +223,7 @@ defmodule Brain.CommandsTest do
 
   test "lembrar de command creates reminder daqui a 3 dias" do
     assert {:reply, reply} =
-             Commands.handle("lembrar de pagar scouts daqui a 3 dias", "user_1", "group_1")
+             Commands.handle("lembrar de pagar scouts daqui a 3 dias", "user_1", "group_1", true)
 
     assert reply =~ "[BOT] 🔔 Lembrete guardado!"
     assert reply =~ "Título: pagar scouts"
@@ -239,14 +239,14 @@ defmodule Brain.CommandsTest do
   test "lembrar de command asks for missing reminder time" do
     assert {:reply,
             "[BOT] Por favor diz quando queres o lembrete, ex: 'logo' ou 'daqui a 3 dias'."} =
-             Commands.handle("lembrar de pagar scouts", "user_1", "group_1")
+             Commands.handle("lembrar de pagar scouts", "user_1", "group_1", true)
 
     assert Repo.all(Reminder) == []
   end
 
   test "lembrar de command creates reminder for à sexta" do
     assert {:reply, reply} =
-             Commands.handle("lembrar de ligar à avó à sexta", "user_1", "group_1")
+             Commands.handle("lembrar de ligar à avó à sexta", "user_1", "group_1", true)
 
     assert reply =~ "[BOT] 🔔 Lembrete guardado!"
     assert reply =~ "Título: ligar à avó"
@@ -258,7 +258,7 @@ defmodule Brain.CommandsTest do
 
   test "lembrar de command creates reminder for às 18h" do
     assert {:reply, reply} =
-             Commands.handle("lembrar de pagar a luz às 18h", "user_1", "group_1")
+             Commands.handle("lembrar de pagar a luz às 18h", "user_1", "group_1", true)
 
     assert reply =~ "[BOT] 🔔 Lembrete guardado!"
     assert reply =~ "Título: pagar a luz"
@@ -269,7 +269,7 @@ defmodule Brain.CommandsTest do
 
   test "lembrar de command creates reminder for amanhã às 9h" do
     assert {:reply, reply} =
-             Commands.handle("lembrar de ligar à avó amanhã às 9h", "user_1", "group_1")
+             Commands.handle("lembrar de ligar à avó amanhã às 9h", "user_1", "group_1", true)
 
     assert reply =~ "[BOT] 🔔 Lembrete guardado!"
     assert reply =~ "Título: ligar à avó"
@@ -281,7 +281,7 @@ defmodule Brain.CommandsTest do
 
   test "lembrar de command supports amanhã às HH:MM" do
     assert {:reply, reply} =
-             Commands.handle("lembrar de pagar a luz amanhã às 18:30", "user_1", "group_1")
+             Commands.handle("lembrar de pagar a luz amanhã às 18:30", "user_1", "group_1", true)
 
     assert reply =~ "[BOT] 🔔 Lembrete guardado!"
     assert reply =~ "Título: pagar a luz"
@@ -294,7 +294,7 @@ defmodule Brain.CommandsTest do
 
   test "lembrar de command supports à sexta às HH:MM" do
     assert {:reply, reply} =
-             Commands.handle("lembrar de ligar à avó à sexta às 14:45", "user_1", "group_1")
+             Commands.handle("lembrar de ligar à avó à sexta às 14:45", "user_1", "group_1", true)
 
     assert reply =~ "[BOT] 🔔 Lembrete guardado!"
 
@@ -306,7 +306,7 @@ defmodule Brain.CommandsTest do
 
   test "lembrar de command rejects invalid hour" do
     assert {:reply, "[BOT] 😕 Essa hora não é válida. Usa um horário entre 0h e 23h."} =
-             Commands.handle("lembrar de pagar a luz às 25h", "user_1", "group_1")
+             Commands.handle("lembrar de pagar a luz às 25h", "user_1", "group_1", true)
 
     assert Repo.all(Reminder) == []
   end
@@ -316,27 +316,28 @@ defmodule Brain.CommandsTest do
              Commands.handle(
                "lembrar de pagar a luz daqui a 999999999999 dias",
                "user_1",
-               "group_1"
+               "group_1",
+               true
              )
 
     assert Repo.all(Reminder) == []
   end
 
   test "unrecognized messages and bot response prefixes are ignored" do
-    assert :ignore = Commands.handle("olá tudo bem?", "user_1", @group_id)
-    assert :ignore = Commands.handle("qual é a receita de hoje?", "user_1", @group_id)
-    assert :ignore = Commands.handle("[BOT] ✅ Adicionado: leite", "user_1", @group_id)
-    assert :ignore = Commands.handle("[BOT] 🗑️ Removido: leite", "user_1", @group_id)
-    assert :ignore = Commands.handle("[BOT] 🛒 Lista de Compras:\n1. leite", "user_1", @group_id)
-    assert :ignore = Commands.handle("[BOT] 🧹 Lista de compras limpa.", "user_1", @group_id)
-    assert :ignore = Commands.handle("[BOT] 🔔 Lembrete: pagar scouts", "user_1", @group_id)
+    assert :ignore = Commands.handle("olá tudo bem?", "user_1", @group_id, true)
+    assert :ignore = Commands.handle("qual é a receita de hoje?", "user_1", @group_id, true)
+    assert :ignore = Commands.handle("[BOT] ✅ Adicionado: leite", "user_1", @group_id, true)
+    assert :ignore = Commands.handle("[BOT] 🗑️ Removido: leite", "user_1", @group_id, true)
+    assert :ignore = Commands.handle("[BOT] 🛒 Lista de Compras:\n1. leite", "user_1", @group_id, true)
+    assert :ignore = Commands.handle("[BOT] 🧹 Lista de compras limpa.", "user_1", @group_id, true)
+    assert :ignore = Commands.handle("[BOT] 🔔 Lembrete: pagar scouts", "user_1", @group_id, true)
   end
 
   test "remove o leite removes 'leite' (articles are stripped)" do
     ShoppingList.add("leite", @group_id, "user_1")
 
     assert {:reply, "[BOT] 🗑️ Removido: leite"} =
-             Commands.handle("remove o leite", "user_1", @group_id)
+             Commands.handle("remove o leite", "user_1", @group_id, true)
 
     assert ShoppingList.get_active_items(@group_id) == []
   end
@@ -345,7 +346,7 @@ defmodule Brain.CommandsTest do
     # Without an LLM configured, it falls through as :ignore — the key assertion
     # is that it is NOT dropped by the old bot_reply? false-positive filter.
     # In production, Gemini would map it to {"action":"add_shopping_items", ...}.
-    result = Commands.handle("por favor adiciona leite", "user_1", @group_id)
+    result = Commands.handle("por favor adiciona leite", "user_1", @group_id, true)
     # The result may be :ignore (LLM stub error) or a reply — but it must NOT be
     # silently dropped by bot_reply?. The old code returned :ignore here due to the
     # "por favor" prefix; now it correctly reaches the LLM fallback path.

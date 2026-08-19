@@ -92,7 +92,7 @@ defmodule Brain.CommandsPantryMenuIntegrationTest do
       "confidence" => 0.9
     })
 
-    assert {:reply, reply} = Commands.handle("tenho arroz, frango", "user_1", @group_id)
+    assert {:reply, reply} = Commands.handle("tenho arroz, frango", "user_1", @group_id, true)
     assert reply =~ "[BOT] ✅ Adicionados à despensa:"
 
     items = Repo.all(Item)
@@ -104,7 +104,7 @@ defmodule Brain.CommandsPantryMenuIntegrationTest do
 
     classify(%{"action" => "list_pantry", "confidence" => 0.9})
 
-    assert {:reply, reply} = Commands.handle("o que tenho na despensa?", "user_1", @group_id)
+    assert {:reply, reply} = Commands.handle("o que tenho na despensa?", "user_1", @group_id, true)
     assert reply =~ "[BOT] 🏠 Despensa:"
     assert reply =~ "arroz"
     assert reply =~ "frango"
@@ -118,7 +118,7 @@ defmodule Brain.CommandsPantryMenuIntegrationTest do
     })
 
     assert {:reply, reply} =
-             Commands.handle("faz-me o menu da semana quarta rápido", "user_1", "group_1")
+             Commands.handle("faz-me o menu da semana quarta rápido", "user_1", "group_1", true)
 
     assert reply =~ "[BOT] 🍽️ Menu da Semana"
     assert reply =~ "Frango assado com batatas"
@@ -136,11 +136,11 @@ defmodule Brain.CommandsPantryMenuIntegrationTest do
       "confidence" => 0.9
     })
 
-    Commands.handle("faz-me o menu", "user_1", "group_1")
+    Commands.handle("faz-me o menu", "user_1", "group_1", true)
 
     classify(%{"action" => "get_recipe", "item" => "terça", "confidence" => 0.9})
 
-    assert {:reply, reply} = Commands.handle("receita de terça", "user_1", "group_1")
+    assert {:reply, reply} = Commands.handle("receita de terça", "user_1", "group_1", true)
     assert reply =~ "[BOT] 📖 Receita: Bacalhau com natas (Terça-feira)"
     assert reply =~ "- 4 postas de bacalhau"
     assert reply =~ "1. Cozer"
@@ -154,7 +154,7 @@ defmodule Brain.CommandsPantryMenuIntegrationTest do
       "confidence" => 0.9
     })
 
-    assert {:reply, reply} = Commands.handle("gostei do bacalhau", "user_1", "group_1")
+    assert {:reply, reply} = Commands.handle("gostei do bacalhau", "user_1", "group_1", true)
     assert reply =~ "[BOT] 📝 Registado: gostei de Bacalhau."
 
     [feedback] = Repo.all(MealFeedback)

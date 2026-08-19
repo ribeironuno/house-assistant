@@ -39,6 +39,18 @@ if bridge_auth_token = System.get_env("BRIDGE_AUTH_TOKEN") do
   config :brain, bridge_auth_token: bridge_auth_token
 end
 
+if groq_api_key = System.get_env("GROQ_API_KEY") do
+  config :brain, groq_api_key: groq_api_key
+end
+
+if groq_model = System.get_env("GROQ_MODEL") do
+  config :brain, groq_model: groq_model
+end
+
+if groq_vision_model = System.get_env("GROQ_VISION_MODEL") do
+  config :brain, groq_vision_model: groq_vision_model
+end
+
 if backoffice_user = System.get_env("BACKOFFICE_USER") do
   config :brain, backoffice_user: backoffice_user
 end

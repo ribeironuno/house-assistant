@@ -5,7 +5,7 @@ messages from the Bridge, classifies commands, reads/writes Postgres, calls Goog
 for LLM features, and replies through the Bridge.
 
 > **Personal use only.** Data in the database is not encrypted at rest.
-> Portuguese only. Gemini is the only supported LLM.
+> Portuguese only. LLM calls use a Gemini + Groq fallback chain.
 
 ## How it works
 
@@ -101,7 +101,8 @@ brain/
 
 ## LLM layer
 
-Two separate prompts, both hitting Google Gemini:
+Two separate prompts, both hitting LLM providers via a fallback chain (Gemini first,
+Groq second):
 
 1. **Classifier** (`PromptHelper`) is lightweight and runs on every unmatched message.
    Receives only the message text and current datetime. Returns a structured JSON
@@ -111,6 +112,9 @@ Two separate prompts, both hitting Google Gemini:
 2. **Menu generator** (`MenuPromptHelper`) is heavy and only called when the classifier
    resolves to `generate_menu`. Receives full pantry, meal history, preferences,
    and user constraints. Runs with a 120-second timeout.
+
+If the primary provider (Gemini) fails with a retryable error (timeout, 429, 5xx,
+network error), the request is automatically retried against Groq.
 
 ### Supported LLM actions
 
@@ -179,6 +183,11 @@ The Bridge must be running separately (`cd bridge && node index.js`).
 |---------|---------|-------------|
 | `GEMINI_API_KEY` | *(none, required)* | Google Gemini API key |
 | `GEMINI_MODEL` | `gemini-flash-latest` | Which Gemini model to use |
+| `GROQ_API_KEY` | *(none, recommended)* | Groq API key (fallback provider) |
+| `GROQ_MODEL` | `llama-3.3-70b-versatile` | Groq model for text classification |
+| `GROQ_VISION_MODEL` | `llama-4-scout-17b-16e-instruct` | Groq model for vision/receipt OCR |
+| `WEBHOOK_SECRET` | *(none, required)* | Shared secret for verifying incoming webhooks from the Bridge |
+| `BRIDGE_AUTH_TOKEN` | *(empty, no auth)* | Shared secret the Brain uses when calling the Bridge's `/send` and `/leave` endpoints |
 | `SECRET_KEY_BASE` | *(none, required in prod)* | Phoenix secret for sessions/cookies (64+ bytes). Generate with `mix phx.gen.secret` |
 | `BACKOFFICE_USER` | *(none, required)* | Backoffice login username |
 | `BACKOFFICE_PASS_HASH` | *(none, required)* | Bcrypt hash of the backoffice password. Generate with `Bcrypt.hash_pwd_salt("your_password")` |
@@ -192,7 +201,6 @@ The Bridge must be running separately (`cd bridge && node index.js`).
 * **Phoenix** 1.8, web framework
 * **Ecto** + **Postgrex**, database
 * **Req**, HTTP client (for Gemini API and Bridge calls)
-* **Hammer**, rate limiting
 * **bcrypt_elixir**, backoffice auth
 
 ## Tests

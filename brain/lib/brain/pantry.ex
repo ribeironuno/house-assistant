@@ -28,27 +28,55 @@ defmodule Brain.Pantry do
   end
 
   def add_many_models(names, group_id, added_by) when is_list(names) do
-    multi =
-      Enum.reduce(names, Ecto.Multi.new(), fn name, acc ->
-        changeset = Item.changeset(%Item{}, %{name: name, added_by: added_by, group_id: group_id})
-        safe_key = String.replace(name, ~r/[^a-zA-Z0-9_]/, "_")
-        Ecto.Multi.insert(acc, :"item_#{safe_key}", changeset)
-      end)
+    existing_names =
+      names
+      |> Enum.uniq()
+      |> Enum.map(&String.trim/1)
+      |> Enum.reject(&(&1 == ""))
+      |> existing_names_for_group(group_id)
 
-    case Repo.transaction(multi) do
-      {:ok, results} ->
-        items = Enum.map(results, fn {_key, item} -> item end)
-        # Preserve the original order from the input names
-        ordered_items =
-          Enum.flat_map(names, fn name ->
-            Enum.filter(items, &(&1.name == name))
-          end)
+    new_names = names |> Enum.uniq() |> Enum.reject(&(&1 in existing_names or String.trim(&1) == ""))
 
-        {:ok, ordered_items}
+    if new_names == [] do
+      {:ok, []}
+    else
+      multi =
+        Enum.reduce(new_names, Ecto.Multi.new(), fn name, acc ->
+          changeset = Item.changeset(%Item{}, %{name: name, added_by: added_by, group_id: group_id})
+          safe_key = String.replace(name, ~r/[^a-zA-Z0-9_]/, "_")
+          Ecto.Multi.insert(acc, :"item_#{safe_key}", changeset)
+        end)
 
-      {:error, _key, _result, _changes} ->
-        {:error, :insert_failed}
+      case Repo.transaction(multi) do
+        {:ok, results} ->
+          items = Enum.map(results, fn {_key, item} -> item end)
+          ordered_items =
+            Enum.flat_map(new_names, fn name ->
+              Enum.filter(items, &(&1.name == name))
+            end)
+
+          {:ok, ordered_items}
+
+        {:error, _key, _result, _changes} ->
+          {:error, :insert_failed}
+      end
     end
+  end
+
+  defp existing_names_for_group([], _group_id), do: []
+
+  defp existing_names_for_group(names, group_id) do
+    trimmed = Enum.map(names, &String.trim/1)
+
+    existing =
+      Repo.all(
+        from(i in Item,
+          where: i.group_id == ^group_id and i.name in ^trimmed,
+          select: i.name
+        )
+      )
+
+    MapSet.to_list(MapSet.new(existing))
   end
 
   def remove("", _group_id) do
