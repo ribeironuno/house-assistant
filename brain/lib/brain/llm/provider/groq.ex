@@ -173,11 +173,20 @@ defmodule Brain.LLM.Providers.Groq do
   defp extract_text(_body), do: {:error, :missing_llm_text}
 
   defp decode_json({:ok, text}) do
-    case Jason.decode(text) do
+    text
+    |> strip_think_tags()
+    |> Jason.decode()
+    |> case do
       {:ok, decoded} -> {:ok, decoded}
       {:error, error} -> {:error, error}
     end
   end
 
   defp decode_json(error), do: error
+
+  defp strip_think_tags(text) do
+    text
+    |> String.replace(~r/<think>.*?<\/think>/s, "")
+    |> String.trim()
+  end
 end
