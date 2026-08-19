@@ -6,7 +6,6 @@ defmodule Brain.Commands do
   alias Brain.Pantry
   alias Brain.Reminders
   alias Brain.ShoppingList
-  alias Brain.Groups
 
   @help_text """
              [BOT] Comandos que conheço:
@@ -43,32 +42,32 @@ defmodule Brain.Commands do
              """
              |> String.trim_trailing()
 
-  def handle(text, sender, group_id \\ nil)
+  def handle(text, sender, group_id \\ nil, isAdmin)
 
-  def handle(text, sender, group_id) when is_binary(text) do
+  def handle(text, sender, group_id, isAdmin) when is_binary(text) do
     trimmed_raw = String.trim(text)
     trimmed_lower = String.downcase(trimmed_raw)
 
     if bot_reply?(trimmed_lower) do
       :ignore
     else
-      route(trimmed_raw, trimmed_lower, sender, group_id)
+      route(trimmed_raw, trimmed_lower, sender, group_id, isAdmin)
     end
   end
 
-  def handle(_text, _sender, _group_id), do: :ignore
+  def handle(_text, _sender, _group_id, _isAdmin), do: :ignore
 
-  defp route(trimmed_raw, trimmed_lower, sender, group_id, llm_attempted? \\ false) do
+  defp route(trimmed_raw, trimmed_lower, sender, group_id, isAdmin, llm_attempted? \\ false) do
     case clear_scopes(trimmed_lower) do
       [] ->
-        route_non_clear(trimmed_raw, trimmed_lower, sender, group_id, llm_attempted?)
+        route_non_clear(trimmed_raw, trimmed_lower, sender, group_id, isAdmin, llm_attempted?)
 
       scopes ->
-        clear_scopes_reply(group_id, scopes, sender)
+        clear_scopes_reply(group_id, scopes, isAdmin)
     end
   end
 
-  defp route_non_clear(trimmed_raw, trimmed_lower, sender, group_id, llm_attempted?) do
+  defp route_non_clear(trimmed_raw, trimmed_lower, sender, group_id, isAdmin, llm_attempted?) do
     cond do
       help_command?(trimmed_lower) ->
         {:reply, @help_text}
@@ -105,14 +104,14 @@ defmodule Brain.Commands do
         |> ShoppingList.remove(group_id)
 
       true and not llm_attempted? ->
-        fallback_to_llm(trimmed_raw, sender, group_id)
+        fallback_to_llm(trimmed_raw, sender, group_id, isAdmin)
 
       true ->
         :ignore
     end
   end
 
-  defp fallback_to_llm(trimmed_raw, sender, group_id) do
+  defp fallback_to_llm(trimmed_raw, sender, group_id, isAdmin) do
     case Brain.LLM.CommandInterpreter.interpret(trimmed_raw) do
       {:ok, {:add_pantry_items, items}} ->
         Brain.Pantry.add_many(items, group_id, sender)
@@ -149,7 +148,14 @@ defmodule Brain.Commands do
         end
 
       {:ok, canonical_command} ->
-        route(canonical_command, String.downcase(canonical_command), sender, group_id, true)
+        route(
+          canonical_command,
+          String.downcase(canonical_command),
+          sender,
+          group_id,
+          isAdmin,
+          true
+        )
 
       :ignore ->
         :ignore
@@ -185,8 +191,8 @@ defmodule Brain.Commands do
   defp maybe_add_scope(scopes, true, scope), do: [scope | scopes]
   defp maybe_add_scope(scopes, _false, _scope), do: scopes
 
-  defp clear_scopes_reply(group_id, scopes, sender) do
-    if Groups.is_admin?(group_id, sender) do
+  defp clear_scopes_reply(group_id, scopes, isAdmin) do
+    if isAdmin do
       replies =
         scopes
         |> Enum.sort()

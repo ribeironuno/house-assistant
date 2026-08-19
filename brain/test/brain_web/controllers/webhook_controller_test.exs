@@ -177,7 +177,6 @@ defmodule BrainWeb.WebhookControllerTest do
 
   defp activate_group(group_id) do
     Brain.Groups.register_pending(group_id)
-    Brain.Groups.add_admin(group_id, "67890@s.whatsapp.net")
     Brain.Groups.activate(group_id)
   end
 end

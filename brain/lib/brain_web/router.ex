@@ -17,10 +17,6 @@ defmodule BrainWeb.Router do
 
   pipeline :webhook_auth do
     plug :verify_webhook_token
-
-    plug Hammer.Plug,
-      rate_limit: {"webhook_rate_limit", 60_000, 30},
-      by: {:conn, &BrainWeb.Router.webhook_rate_limit_key/1}
   end
 
   pipeline :backoffice_auth do
@@ -57,10 +53,6 @@ defmodule BrainWeb.Router do
 
   pipeline :backoffice_login do
     plug :browser
-
-    plug Hammer.Plug,
-      rate_limit: {"backoffice_login_rate_limit", 60_000, 5},
-      by: {:conn, &BrainWeb.Router.backoffice_login_rate_limit_key/1}
   end
 
   defp verify_webhook_token(conn, _opts) do
@@ -104,21 +96,6 @@ defmodule BrainWeb.Router do
       |> Plug.Conn.halt()
     end
   end
-
-  def webhook_rate_limit_key(conn) do
-    conn.params["sender"] || format_remote_ip(conn.remote_ip)
-  end
-
-  def backoffice_login_rate_limit_key(conn) do
-    format_remote_ip(conn.remote_ip)
-  end
-
-  defp format_remote_ip({a, b, c, d}) do
-    "#{a}.#{b}.#{c}.#{d}"
-  end
-
-  defp format_remote_ip(ip) when is_binary(ip), do: ip
-  defp format_remote_ip(_), do: "unknown"
 
   def put_csp_header(conn, _opts \\ []) do
     csp =

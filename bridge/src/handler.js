@@ -137,11 +137,16 @@ export async function handleIncomingMessage(client, message) {
   }
 
   const groupName = await getGroupName(client, message, groupId);
+  const senderId = message.fromMe
+    ? client.info.wid._serialized
+    : (message.author ?? message.from);
+  const isAdmin = await getIsAdmin(client, groupId, senderId);
 
   console.log("[Bridge] Processing incoming command from group", {
     group: groupId,
     groupName: groupName,
-    sender: message.author ?? message.from,
+    sender: senderId,
+    isAdmin: isAdmin,
     fromMe: message.fromMe,
     text: message.body,
     hasMedia: !!mediaData,
@@ -150,7 +155,8 @@ export async function handleIncomingMessage(client, message) {
   const response = await postToBrain({
     group_id: groupId,
     group_name: groupName,
-    sender: message.author ?? message.from,
+    sender: senderId,
+    is_admin: isAdmin,
     text: message.body || "",
     media: mediaData,
     from_me: message.fromMe,
@@ -165,6 +171,27 @@ export async function handleIncomingMessage(client, message) {
   }
 }
 
+async function getIsAdmin(client, groupId, senderId) {
+  if (!senderId) return false;
+
+  try {
+    const chat = await client.getChatById(groupId);
+    if (!chat || !chat.isGroup) return false;
+
+    const participant = chat.participants?.find(
+      (p) => p.id._serialized === senderId,
+    );
+
+    return !!(participant?.isAdmin || participant?.isSuperAdmin);
+  } catch (err) {
+    console.error(
+      "[Bridge] Failed to resolve admin status for",
+      senderId,
+      err.message,
+    );
+    return false;
+  }
+}
 /**
  * Handles group_join notification when bot is added to a group.
  * Notifies the brain so it can introduce itself.

@@ -19,7 +19,6 @@ defmodule Brain.Groups.Group do
     field(:group_id, :string, primary_key: true)
     field(:status, :string, default: "waiting_approval")
     field(:name, :string)
-    field(:admin_numbers, {:array, :string}, default: [])
 
     timestamps()
   end
@@ -28,7 +27,7 @@ defmodule Brain.Groups.Group do
 
   def changeset(group, attrs) do
     group
-    |> cast(attrs, [:group_id, :status, :name, :admin_numbers])
+    |> cast(attrs, [:group_id, :status, :name])
     |> validate_required([:group_id, :status])
     |> validate_inclusion(:status, @statuses)
   end

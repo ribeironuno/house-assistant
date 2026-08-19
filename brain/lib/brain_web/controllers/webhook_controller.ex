@@ -19,6 +19,7 @@ defmodule BrainWeb.WebhookController do
       "text"     => "<message body>",
       "media"    => %{"data" => ..., "mimetype" => ...},  # optional
       "from_me"  => true | false,
+      "is_admin"   => true | false,
       "timestamp" => <unix ts>,
       "message_id" => "<whatsapp message id>"  # for idempotency
     }
@@ -51,6 +52,7 @@ defmodule BrainWeb.WebhookController do
     text = Map.get(params, "text", "")
     opts = extract_group_opts(params)
     message_id = Map.get(params, "message_id")
+    is_admin = parse_bool(Map.get(params, "is_admin"))
 
     with_group_gating(group_id, text, sender, opts, message_id, media, fn ->
       Logger.info(
@@ -63,7 +65,7 @@ defmodule BrainWeb.WebhookController do
 
         :ignore ->
           if text != "" do
-            enqueue_command(group_id, sender, text, "text", "", message_id)
+            enqueue_command(group_id, sender, text, "text", "", is_admin, message_id)
           end
       end
     end)
@@ -74,13 +76,14 @@ defmodule BrainWeb.WebhookController do
   def create(conn, %{"group_id" => group_id, "sender" => sender, "text" => text} = params) do
     opts = extract_group_opts(params)
     message_id = Map.get(params, "message_id")
+    is_admin = parse_bool(Map.get(params, "is_admin"))
 
     with_group_gating(group_id, text, sender, opts, message_id, nil, fn ->
       Logger.info(
         "[Brain] Received message in group #{group_id} from #{sender}: #{inspect(text)}"
       )
 
-      enqueue_command(group_id, sender, text, "text", "", message_id)
+      enqueue_command(group_id, sender, text, "text", "", is_admin, message_id)
     end)
 
     json(conn, %{status: "ok"})
@@ -116,23 +119,23 @@ defmodule BrainWeb.WebhookController do
     end
   end
 
-  defp enqueue_command(group_id, sender, message, message_type, media_base64, message_id) do
+  defp enqueue_command(group_id, sender, message, message_type, media_base64, is_admin, message_id) do
     message_id =
       message_id || "#{group_id}-#{sender}-#{DateTime.to_unix(DateTime.utc_now())}"
 
     case Repo.insert(%ProcessedMessage{message_id: message_id}, on_conflict: :nothing) do
       {:ok, _} ->
-        process_command(group_id, sender, message, message_type, media_base64)
+        process_command(group_id, sender, message, message_type, media_base64, is_admin)
 
       {:error, _} ->
         {:ok, :duplicate}
     end
   end
 
-  defp process_command(group_id, sender, message, _message_type, _media_base64) do
+  defp process_command(group_id, sender, message, _message_type, _media_base64, is_admin) do
     case Groups.get_group(group_id) do
       %Groups.Group{status: "active"} = _group ->
-        case Commands.handle(message, sender, group_id) do
+        case Commands.handle(message, sender, group_id, is_admin) do
           {:reply, reply_text} ->
             BridgeClient.send_message(group_id, reply_text)
             {:ok, :processed}
@@ -157,4 +160,8 @@ defmodule BrainWeb.WebhookController do
         {:ok, :ignored}
     end
   end
+
+  defp parse_bool("true"), do: true
+  defp parse_bool(true), do: true
+  defp parse_bool(_), do: false
 end

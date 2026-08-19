@@ -64,34 +64,6 @@ defmodule BrainWeb.BackofficeLive do
     end
   end
 
-  @impl true
-  def handle_event("add_admin", %{"group_id" => group_id, "number" => number}, socket) do
-    number = String.trim(number)
-
-    if number == "" do
-      {:noreply, put_flash(socket, :error, "Admin number cannot be empty")}
-    else
-      case Groups.add_admin(group_id, number) do
-        {:ok, _admins} ->
-          {:noreply, assign(socket, groups: fetch_groups()) |> put_flash(:info, "Admin added")}
-
-        {:error, reason} ->
-          {:noreply, put_flash(socket, :error, "Failed to add admin: #{reason}")}
-      end
-    end
-  end
-
-  @impl true
-  def handle_event("remove_admin", %{"group_id" => group_id, "number" => number}, socket) do
-    case Groups.remove_admin(group_id, number) do
-      {:ok, _admins} ->
-        {:noreply, assign(socket, groups: fetch_groups()) |> put_flash(:info, "Admin removed")}
-
-      {:error, reason} ->
-        {:noreply, put_flash(socket, :error, "Failed to remove admin: #{reason}")}
-    end
-  end
-
   defp fetch_groups do
     Repo.all(Group) |> Enum.sort_by(& &1.inserted_at, :desc)
   end
@@ -136,7 +108,6 @@ defmodule BrainWeb.BackofficeLive do
           <th>Group Name</th>
           <th>Group ID</th>
           <th>Status</th>
-          <th>Admin Numbers</th>
           <th>Created</th>
           <th>Actions</th>
         </tr>
@@ -148,30 +119,6 @@ defmodule BrainWeb.BackofficeLive do
             <td style="font-family: monospace; font-size: 0.85rem;"><%= group.group_id %></td>
             <td>
               <span class={"status status-#{group.status}"}><%= group.status %></span>
-            </td>
-            <td>
-              <div style="display: flex; flex-direction: column; gap: 0.4rem;">
-                <%= if group.admin_numbers && group.admin_numbers != [] do %>
-                  <%= for num <- group.admin_numbers do %>
-                    <span style="display: flex; align-items: center; gap: 0.5rem; font-family: monospace; font-size: 0.85rem;">
-                      <%= num %>
-                      <form phx-submit="remove_admin" phx-value-group_id={group.group_id} phx-value-number={num} style="display: inline;">
-                        <input type="hidden" name="_csrf_token" value={Plug.CSRFProtection.get_csrf_token()} />
-                        <button type="submit" style="background: none; border: none; color: #e53e3e; cursor: pointer; padding: 0; font-size: 0.85rem;" phx-confirm="Remove this admin number?">✕</button>
-                      </form>
-                    </span>
-                  <% end %>
-                <% else %>
-                  <span style="color: #a0aec0; font-size: 0.85rem;">(none)</span>
-                <% end %>
-                <%= if group.status in ["pending", "active"] do %>
-                  <form phx-submit="add_admin" phx-value-group_id={group.group_id} style="display: flex; gap: 0.4rem; max-width: 350px;">
-                    <input type="hidden" name="_csrf_token" value={Plug.CSRFProtection.get_csrf_token()} />
-                    <input type="text" name="number" placeholder="5511999999999@s.whatsapp.net" style="flex: 1; padding: 0.4rem 0.6rem; border: 1px solid #cbd5e0; border-radius: 4px; font-size: 0.85rem;" />
-                    <button type="submit" style="padding: 0.4rem 0.8rem; background: #38a169; color: white; border: none; border-radius: 4px; font-size: 0.85rem; cursor: pointer;">Add</button>
-                  </form>
-                <% end %>
-              </div>
             </td>
             <td><%= Calendar.strftime(group.inserted_at, "%Y-%m-%d %H:%M") %></td>
             <td class="actions">
@@ -217,7 +164,7 @@ defmodule BrainWeb.BackofficeLive do
         <% end %>
         <%= if Enum.empty?(@visible_groups) do %>
           <tr>
-            <td colspan="6" style="text-align: center; color: #718096; padding: 2rem;">
+            <td colspan="5" style="text-align: center; color: #718096; padding: 2rem;">
               No groups found.
             </td>
           </tr>

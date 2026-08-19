@@ -38,11 +38,10 @@ defmodule BrainWeb.ConnCase do
   @doc """
   Ensures a `groups` row exists so child records (shopping/pantry items,
   reminders, menus, feedback) satisfy the foreign key to `groups`.
-  The row is created as `pending` with "user_1" as admin; it does not affect group activation flows.
+  The row is created as `pending`; it does not affect group activation flows.
   """
   def ensure_group(group_id) do
     Brain.Groups.register_pending(group_id)
-    Brain.Groups.add_admin(group_id, "user_1")
     :ok
   end
 end
